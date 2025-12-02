@@ -13,6 +13,6 @@ public record BillResponseDTO(
         Integer parcelNumber,
         Periodicity periodicity,
         StatusBill status,
-        CategoryResponseDTO category
+        String categoryName
 ) {
 }
