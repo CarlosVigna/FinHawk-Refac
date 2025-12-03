@@ -1,7 +1,7 @@
 package com.carlos.finhawk_refac.entity;
 
-import com.carlos.finhawk_refac.enums.Roles;
 import com.carlos.finhawk_refac.enums.UserRole;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -20,7 +20,7 @@ import java.util.List;
 @NoArgsConstructor
 
 @Entity
-@Table(name ="user")
+@Table(name ="user_account")
 public class UserAccount implements UserDetails {
 
     @Id
@@ -36,8 +36,10 @@ public class UserAccount implements UserDetails {
 
     private String password;
 
+    @Enumerated(EnumType.STRING)
     private UserRole role;
 
+    @JsonIgnore
     @OneToMany(mappedBy = "userAccount", cascade = CascadeType.ALL)
     private List<Account> accounts;
 
@@ -46,11 +48,11 @@ public class UserAccount implements UserDetails {
         if (this.role == UserRole.ADMIN) {
             return List.of(
                     new SimpleGrantedAuthority("ROLE_ADMIN"),
-                    new SimpleGrantedAuthority("ROLE_USER")
+                    new SimpleGrantedAuthority("ROLE_VIEWER")
             );
         }
 
-        return List.of(new SimpleGrantedAuthority("ROLE_USER"));
+        return List.of(new SimpleGrantedAuthority("ROLE_VIEWER"));
     }
 
     public UserAccount (String email, String password, UserRole role){

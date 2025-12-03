@@ -29,7 +29,7 @@ public class Account {
     private String photoUrl;
 
     @ManyToOne
-    @JoinColumn(name = "user_id")
+    @JoinColumn(name = "id_user")
     private UserAccount userAccount;
 
     @OneToMany(mappedBy = "account", cascade = CascadeType.ALL)

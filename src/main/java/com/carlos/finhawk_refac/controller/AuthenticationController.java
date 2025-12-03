@@ -7,6 +7,7 @@ import com.carlos.finhawk_refac.dto.RegisterDTO;
 import com.carlos.finhawk_refac.dto.response.LoginResponseDTO;
 import com.carlos.finhawk_refac.entity.UserAccount;
 import com.carlos.finhawk_refac.repository.UserAccountRepository;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -44,7 +45,7 @@ public class AuthenticationController {
 
     @PostMapping("/register")
     public ResponseEntity register(@RequestBody @Valid RegisterDTO data){
-        if (this.userAccountRepository.findByLogin(data.email()) != null)
+        if (this.userAccountRepository.findByEmail(data.email()) != null)
             return ResponseEntity.badRequest().build();
         String encryptedPassword = new BCryptPasswordEncoder().encode(data.password());
         UserAccount newUser = new UserAccount(data.email(), encryptedPassword, data.role());
