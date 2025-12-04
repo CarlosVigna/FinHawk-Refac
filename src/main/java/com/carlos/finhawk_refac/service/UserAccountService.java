@@ -5,6 +5,7 @@ import com.carlos.finhawk_refac.dto.response.UserAccountResponseDTO;
 import com.carlos.finhawk_refac.entity.UserAccount;
 import com.carlos.finhawk_refac.repository.UserAccountRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
 
@@ -12,42 +13,50 @@ import java.util.List;
 public class UserAccountService {
 
     private final UserAccountRepository userAccountRepository;
+    private final PasswordEncoder passwordEncoder;
 
-    public UserAccountService(UserAccountRepository userAccountRepository) {
+    public UserAccountService(UserAccountRepository userAccountRepository, PasswordEncoder passwordEncoder) {
         this.userAccountRepository = userAccountRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
 
-    public UserAccountResponseDTO create(UserAccountRequestDTO userDto) {
-        UserAccount newUser = new UserAccount();
-        newUser.setName(userDto.name());
-        newUser.setEmail(userDto.email());
-        newUser.setPassword(userDto.password());
-
-        UserAccount saved = userAccountRepository.save(newUser);
-
-        return new UserAccountResponseDTO(
-                saved.getId(),
-                saved.getName(),
-                saved.getEmail()
-        );
-    }
+//    public UserAccountResponseDTO create(UserAccountRequestDTO userDto) {
+//        UserAccount newUser = new UserAccount();
+//        newUser.setName(userDto.name());
+//        newUser.setEmail(userDto.email());
+//        newUser.setPassword(userDto.password());
+//
+//        UserAccount saved = userAccountRepository.save(newUser);
+//
+//        return new UserAccountResponseDTO(
+//                saved.getId(),
+//                saved.getName(),
+//                saved.getEmail()
+//        );
+//    }
 
 
     public UserAccountResponseDTO update(Long id, UserAccountRequestDTO userDto) {
         UserAccount oldUser = userAccountRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        oldUser.setName(userDto.name());
-        oldUser.setEmail(userDto.email());
-        oldUser.setPassword(userDto.password());
+        if(userDto.name() != null) oldUser.setName(userDto.name());
+        if(userDto.email() != null) oldUser.setEmail(userDto.email());
+
+        if(userDto.password() != null && !userDto.password().isBlank()) {
+            oldUser.setPassword(passwordEncoder.encode(userDto.password()));
+        }
+
+        if(userDto.role() != null) oldUser.setRole(userDto.role());
 
         UserAccount updated = userAccountRepository.save(oldUser);
 
         return new UserAccountResponseDTO(
                 updated.getId(),
                 updated.getName(),
-                updated.getEmail()
+                updated.getEmail(),
+                updated.getRole().name()
         );
     }
 
@@ -58,7 +67,8 @@ public class UserAccountService {
                 .map(user -> new UserAccountResponseDTO(
                         user.getId(),
                         user.getName(),
-                        user.getEmail()
+                        user.getEmail(),
+                        user.getRole().name()
                 ))
                 .toList();
     }
@@ -70,7 +80,9 @@ public class UserAccountService {
         return new UserAccountResponseDTO(
                 user.getId(),
                 user.getName(),
-                user.getEmail()
+                user.getEmail(),
+                user.getRole().name()
+
         );
     }
     public void delete(Long id){

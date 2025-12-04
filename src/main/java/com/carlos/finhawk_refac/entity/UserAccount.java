@@ -18,7 +18,6 @@ import java.util.List;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-
 @Entity
 @Table(name ="user_account")
 public class UserAccount implements UserDetails {
@@ -43,6 +42,13 @@ public class UserAccount implements UserDetails {
     @OneToMany(mappedBy = "userAccount", cascade = CascadeType.ALL)
     private List<Account> accounts;
 
+    public UserAccount(String name, String email, String password, UserRole role){
+        this.name = name;
+        this.email = email;
+        this.password = password;
+        this.role = role;
+    }
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         if (this.role == UserRole.ADMIN) {
@@ -51,38 +57,21 @@ public class UserAccount implements UserDetails {
                     new SimpleGrantedAuthority("ROLE_VIEWER")
             );
         }
-
         return List.of(new SimpleGrantedAuthority("ROLE_VIEWER"));
     }
 
-    public UserAccount (String email, String password, UserRole role){
-        this.email = email;
-        this.password = password;
-        this.role = role;
-    }
+    @Override
+    public String getUsername() { return email; }
 
     @Override
-    public String getUsername() {
-        return email;
-    }
+    public boolean isAccountNonExpired() { return true; }
 
     @Override
-    public boolean isAccountNonExpired() {
-        return UserDetails.super.isAccountNonExpired();
-    }
+    public boolean isAccountNonLocked() { return true; }
 
     @Override
-    public boolean isAccountNonLocked() {
-        return UserDetails.super.isAccountNonLocked();
-    }
+    public boolean isCredentialsNonExpired() { return true; }
 
     @Override
-    public boolean isCredentialsNonExpired() {
-        return UserDetails.super.isCredentialsNonExpired();
-    }
-
-    @Override
-    public boolean isEnabled() {
-        return UserDetails.super.isEnabled();
-    }
+    public boolean isEnabled() { return true; }
 }
