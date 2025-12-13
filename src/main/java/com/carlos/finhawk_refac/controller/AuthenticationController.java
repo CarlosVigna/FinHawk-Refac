@@ -5,6 +5,7 @@ import com.carlos.finhawk_refac.dto.AuthenticationDTO;
 import com.carlos.finhawk_refac.dto.RegisterDTO;
 import com.carlos.finhawk_refac.dto.response.LoginResponseDTO;
 import com.carlos.finhawk_refac.entity.UserAccount;
+import com.carlos.finhawk_refac.enums.UserRole;
 import com.carlos.finhawk_refac.repository.UserAccountRepository;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -48,7 +49,14 @@ public class AuthenticationController {
 
         String encryptedPassword = new BCryptPasswordEncoder().encode(data.password());
 
-        UserAccount newUser = new UserAccount(data.name(), data.email(), encryptedPassword, data.role());
+        var role = data.role() != null ? data.role() : UserRole.ADMIN;
+
+        UserAccount newUser = new UserAccount(
+                data.name(),
+                data.email(),
+                encryptedPassword,
+                role
+        );
 
         this.userAccountRepository.save(newUser);
 
