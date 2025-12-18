@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/cagegory")
+@RequestMapping("/category")
 public class CategoryController {
 
     public final CategoryService categoryService;

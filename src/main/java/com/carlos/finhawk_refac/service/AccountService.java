@@ -6,6 +6,7 @@ import com.carlos.finhawk_refac.entity.Account;
 import com.carlos.finhawk_refac.entity.UserAccount;
 import com.carlos.finhawk_refac.repository.AccountRepository;
 import com.carlos.finhawk_refac.repository.UserAccountRepository;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
@@ -23,10 +24,13 @@ public class AccountService {
     }
 
     private UserAccount getAuthenticatedUser() {
-        String email = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
-        return userAccountRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        if (authentication == null || !(authentication.getPrincipal() instanceof UserAccount)) {
+            throw new RuntimeException("Unauthenticated user");
+        }
+
+        return (UserAccount) authentication.getPrincipal();
     }
 
     public AccountResponseDTO create(AccountRequestDTO dto) {
