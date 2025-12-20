@@ -4,6 +4,7 @@ import com.carlos.finhawk_refac.enums.CategoryType;
 
 public record CategoryRequestDTO(
         String name,
-        CategoryType type
+        CategoryType type,
+        Long accountId
 ) {
 }

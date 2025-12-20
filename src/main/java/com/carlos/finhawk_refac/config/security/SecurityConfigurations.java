@@ -17,7 +17,6 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -34,9 +33,16 @@ public class SecurityConfigurations {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
+                        // ===== ROTAS PÚBLICAS (sem autenticação) =====
                         .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/register").permitAll()
-                        .requestMatchers(HttpMethod.DELETE, "/bill").hasRole("ADMIN")
+
+                        // ===== ROTAS RESTRITAS POR ROLE =====
+                        .requestMatchers(HttpMethod.DELETE, "/bill/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/user/**").hasRole("ADMIN")
+
+                        // ===== TODAS AS OUTRAS ROTAS =====
+                        // Qualquer usuário AUTENTICADO pode acessar
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class)

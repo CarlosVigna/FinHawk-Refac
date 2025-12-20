@@ -9,6 +9,5 @@ import java.util.List;
 
 @Repository
 public interface AccountRepository extends JpaRepository<Account, Long> {
-    // Busca todas as contas que pertencem a um usuário específico
     List<Account> findAllByUserAccount(UserAccount userAccount);
 }

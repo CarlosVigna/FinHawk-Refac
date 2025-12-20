@@ -21,11 +21,6 @@ public class UserAccountController {
     }
 
 
-//    @PostMapping
-//    public ResponseEntity<UserAccountResponseDTO > create(@RequestBody UserAccountRequestDTO dto){
-//        UserAccountResponseDTO newUser = userAccountService.create(dto);
-//        return ResponseEntity.ok(newUser);
-//    }
 
     @PutMapping("/{id}")
     public ResponseEntity<UserAccountResponseDTO> update(@PathVariable Long id, @RequestBody UserAccountRequestDTO dto){

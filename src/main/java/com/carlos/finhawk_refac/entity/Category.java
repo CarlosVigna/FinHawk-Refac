@@ -30,4 +30,8 @@ public class Category {
 
     @OneToMany(mappedBy = "category")
     private List<Bill> bills;
+
+    @ManyToOne
+    @JoinColumn(name = "account_id")
+    private Account account;
 }

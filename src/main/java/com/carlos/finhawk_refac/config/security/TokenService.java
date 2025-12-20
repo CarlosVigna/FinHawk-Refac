@@ -20,15 +20,21 @@ public class TokenService {
 
     public String generateToken(UserAccount userAccount){
         try{
+            Instant expirationDate = genExpirationDate();
+            System.out.println("=== GERANDO TOKEN ===");
+            System.out.println("Data/hora atual: " + LocalDateTime.now());
+            System.out.println("Token expira em: " + expirationDate);
+            System.out.println("Timezone: " + ZoneOffset.of("-03:00"));
+
             Algorithm algorithm = Algorithm.HMAC256(secret);
             String token = JWT.create()
                     .withIssuer("auth-api")
                     .withSubject(userAccount.getEmail())
                     .withClaim("role", userAccount.getRole().name())
-                    .withExpiresAt(genExpirationDate())
+                    .withExpiresAt(expirationDate)
                     .sign(algorithm);
-        return token;
-        }catch (JWTCreationException exception){
+            return token;
+        } catch (JWTCreationException exception){
             throw new RuntimeException("Error while generating token ", exception);
         }
     }

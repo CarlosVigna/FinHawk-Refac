@@ -21,20 +21,6 @@ public class UserAccountService {
     }
 
 
-//    public UserAccountResponseDTO create(UserAccountRequestDTO userDto) {
-//        UserAccount newUser = new UserAccount();
-//        newUser.setName(userDto.name());
-//        newUser.setEmail(userDto.email());
-//        newUser.setPassword(userDto.password());
-//
-//        UserAccount saved = userAccountRepository.save(newUser);
-//
-//        return new UserAccountResponseDTO(
-//                saved.getId(),
-//                saved.getName(),
-//                saved.getEmail()
-//        );
-//    }
 
 
     public UserAccountResponseDTO update(Long id, UserAccountRequestDTO userDto) {
