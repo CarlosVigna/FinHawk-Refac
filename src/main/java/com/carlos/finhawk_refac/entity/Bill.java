@@ -32,20 +32,18 @@ public class Bill {
     @Column(nullable = false)
     private LocalDate maturity;
 
-    @Column(name = "total_amount", nullable = false)
-    private BigDecimal totalAmount;
-
-    @Column(name = "installment_amount")
+    @Column(name = "installment_amount", nullable = false)
     private BigDecimal installmentAmount;
 
-    @Column(name = "installment_count", nullable = false)
+    @Column(name = "parcel_number")
     private Integer installmentCount;
 
+    // Parcela atual (1, 2, 3...)
     @Column(name = "current_installment")
     private Integer currentInstallment = 1;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "periodicity", nullable = false)
     private Periodicity periodicity;
 
     @Enumerated(EnumType.STRING)

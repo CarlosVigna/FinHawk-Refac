@@ -11,7 +11,6 @@ public record BillResponseDTO(
         String description,
         LocalDate emission,
         LocalDate maturity,
-        BigDecimal totalAmount,
         BigDecimal installmentAmount,
         Integer installmentCount,
         Integer currentInstallment,

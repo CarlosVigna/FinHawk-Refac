@@ -42,6 +42,13 @@ public class CategoryController {
         return ResponseEntity.ok(categories);
     }
 
+    @GetMapping("/account/{accountId}")
+    public ResponseEntity<List<CategoryResponseDTO>> getAllByAccountId(@PathVariable Long accountId) {
+        List<CategoryResponseDTO> categories = categoryService.getAllByAccountId(accountId);
+        return ResponseEntity.ok(categories);
+    }
+
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id){
         categoryService.delete(id);

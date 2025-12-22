@@ -10,10 +10,11 @@ public record BillRequestDTO(
         String description,
         LocalDate emission,
         LocalDate maturity,
-        BigDecimal totalAmount,
+        BigDecimal installmentAmount,
         Integer installmentCount,
         Periodicity periodicity,
         StatusBill status,
-        Long categoryId
+        Long categoryId,
+        Long accountId
 ) {
 }

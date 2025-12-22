@@ -14,8 +14,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.List;
 
 @Service
@@ -36,7 +34,6 @@ public class BillService {
     }
 
     /* ===================== AUTH ===================== */
-
     private UserAccount getAuthenticatedUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
@@ -48,14 +45,12 @@ public class BillService {
     }
 
     /* ===================== MAPPER ===================== */
-
     private BillResponseDTO toResponseDTO(Bill bill) {
         return new BillResponseDTO(
                 bill.getId(),
                 bill.getDescription(),
                 bill.getEmission(),
                 bill.getMaturity(),
-                bill.getTotalAmount(),
                 bill.getInstallmentAmount(),
                 bill.getInstallmentCount(),
                 bill.getCurrentInstallment(),
@@ -66,14 +61,15 @@ public class BillService {
     }
 
     /* ===================== CREATE ===================== */
-
     public BillResponseDTO create(BillRequestDTO dto) {
         UserAccount currentUser = getAuthenticatedUser();
 
-        Account account = accountRepository.findAllByUserAccount(currentUser)
-                .stream()
-                .findFirst()
+        Account account = accountRepository.findById(dto.accountId())
                 .orElseThrow(() -> new RuntimeException("Account not found"));
+
+        if (!account.getUserAccount().getId().equals(currentUser.getId())) {
+            throw new RuntimeException("You are not allowed to use this account");
+        }
 
         Category category = categoryRepository.findById(dto.categoryId())
                 .orElseThrow(() -> new RuntimeException("Category not found"));
@@ -86,7 +82,7 @@ public class BillService {
         bill.setDescription(dto.description());
         bill.setEmission(dto.emission());
         bill.setMaturity(dto.maturity());
-        bill.setTotalAmount(dto.totalAmount());
+        bill.setInstallmentAmount(dto.installmentAmount());
         bill.setInstallmentCount(dto.installmentCount() != null ? dto.installmentCount() : 1);
         bill.setCurrentInstallment(1);
         bill.setPeriodicity(dto.periodicity());
@@ -94,14 +90,11 @@ public class BillService {
         bill.setCategory(category);
         bill.setAccount(account);
 
-        calcularParcelas(bill);
-
         Bill saved = billRepository.save(bill);
         return toResponseDTO(saved);
     }
 
     /* ===================== UPDATE ===================== */
-
     public BillResponseDTO update(Long id, BillRequestDTO dto) {
         UserAccount currentUser = getAuthenticatedUser();
 
@@ -129,22 +122,19 @@ public class BillService {
             bill.setStatus(dto.status());
         }
 
-        if (dto.totalAmount() != null) {
-            bill.setTotalAmount(dto.totalAmount());
+        if (dto.installmentAmount() != null) {
+            bill.setInstallmentAmount(dto.installmentAmount());
         }
 
         if (dto.installmentCount() != null) {
             bill.setInstallmentCount(dto.installmentCount());
         }
 
-        calcularParcelas(bill);
-
         Bill updated = billRepository.save(bill);
         return toResponseDTO(updated);
     }
 
     /* ===================== GETS ===================== */
-
     public List<BillResponseDTO> getAll() {
         UserAccount currentUser = getAuthenticatedUser();
 
@@ -193,7 +183,6 @@ public class BillService {
     }
 
     /* ===================== DELETE ===================== */
-
     public void delete(Long id) {
         UserAccount currentUser = getAuthenticatedUser();
 
@@ -207,20 +196,4 @@ public class BillService {
         billRepository.delete(bill);
     }
 
-    /* ===================== AUX ===================== */
-
-    private void calcularParcelas(Bill bill) {
-        if (bill.getInstallmentCount() != null && bill.getInstallmentCount() > 1) {
-            bill.setInstallmentAmount(
-                    bill.getTotalAmount().divide(
-                            BigDecimal.valueOf(bill.getInstallmentCount()),
-                            2,
-                            RoundingMode.HALF_UP
-                    )
-            );
-        } else {
-            bill.setInstallmentCount(1);
-            bill.setInstallmentAmount(bill.getTotalAmount());
-        }
-    }
 }
