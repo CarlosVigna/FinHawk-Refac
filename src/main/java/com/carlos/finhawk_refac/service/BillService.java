@@ -2,6 +2,7 @@ package com.carlos.finhawk_refac.service;
 
 import com.carlos.finhawk_refac.dto.request.BillRequestDTO;
 import com.carlos.finhawk_refac.dto.response.BillResponseDTO;
+import com.carlos.finhawk_refac.dto.response.CategoryResponseDTO;
 import com.carlos.finhawk_refac.entity.Account;
 import com.carlos.finhawk_refac.entity.Bill;
 import com.carlos.finhawk_refac.entity.Category;
@@ -54,9 +55,12 @@ public class BillService {
                 bill.getInstallmentAmount(),
                 bill.getInstallmentCount(),
                 bill.getCurrentInstallment(),
-                bill.getPeriodicity(),
                 bill.getStatus(),
-                bill.getCategory().getName()
+                new CategoryResponseDTO(
+                        bill.getCategory().getId(),
+                        bill.getCategory().getName(),
+                        bill.getCategory().getType().name()
+                )
         );
     }
 

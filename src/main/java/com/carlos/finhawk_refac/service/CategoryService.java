@@ -6,6 +6,7 @@ import com.carlos.finhawk_refac.dto.response.CategoryResponseDTO;
 import com.carlos.finhawk_refac.entity.Account;
 import com.carlos.finhawk_refac.entity.Category;
 import com.carlos.finhawk_refac.entity.UserAccount;
+import com.carlos.finhawk_refac.enums.CategoryType;
 import com.carlos.finhawk_refac.repository.AccountRepository;
 import com.carlos.finhawk_refac.repository.CategoryRepository;
 import org.springframework.security.core.Authentication;
@@ -46,7 +47,11 @@ public class CategoryService {
 
         Category newCategory = new Category();
         newCategory.setName(dto.name());
-        newCategory.setType(dto.type());
+
+        newCategory.setType(
+                CategoryType.valueOf(dto.type().toUpperCase())
+        );
+
         newCategory.setAccount(account);
 
         Category saved = categoryRepository.save(newCategory);
@@ -54,7 +59,7 @@ public class CategoryService {
         return new CategoryResponseDTO(
                 saved.getId(),
                 saved.getName(),
-                saved.getType()
+                saved.getType().name()
         );
     }
 
@@ -79,15 +84,22 @@ public class CategoryService {
             oldCategory.setAccount(newAccount);
         }
 
-        oldCategory.setName(dto.name());
-        oldCategory.setType(dto.type());
+        if (dto.name() != null) {
+            oldCategory.setName(dto.name());
+        }
+
+        if (dto.type() != null) {
+            oldCategory.setType(
+                    CategoryType.valueOf(dto.type().toUpperCase())
+            );
+        }
 
         Category updated = categoryRepository.save(oldCategory);
 
         return new CategoryResponseDTO(
                 updated.getId(),
                 updated.getName(),
-                updated.getType()
+                updated.getType().name()
         );
     }
 
@@ -101,7 +113,7 @@ public class CategoryService {
                 .map(category -> new CategoryResponseDTO(
                         category.getId(),
                         category.getName(),
-                        category.getType()
+                        category.getType().name()
                 ))
                 .toList();
     }
@@ -119,7 +131,7 @@ public class CategoryService {
         return new CategoryResponseDTO(
                 category.getId(),
                 category.getName(),
-                category.getType()
+                category.getType().name()
         );
     }
 
@@ -150,10 +162,9 @@ public class CategoryService {
                 .map(category -> new CategoryResponseDTO(
                         category.getId(),
                         category.getName(),
-                        category.getType()
+                        category.getType().name()
                 ))
                 .toList();
     }
-
 
 }

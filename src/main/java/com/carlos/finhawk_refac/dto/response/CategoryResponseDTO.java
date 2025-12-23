@@ -5,6 +5,7 @@ import com.carlos.finhawk_refac.enums.CategoryType;
 public record CategoryResponseDTO(
         Long id,
         String name,
-        CategoryType type
+        String type
 ) {
+
 }
