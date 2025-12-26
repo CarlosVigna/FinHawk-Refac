@@ -7,6 +7,7 @@ import com.carlos.finhawk_refac.entity.Account;
 import com.carlos.finhawk_refac.entity.Bill;
 import com.carlos.finhawk_refac.entity.Category;
 import com.carlos.finhawk_refac.entity.UserAccount;
+import com.carlos.finhawk_refac.enums.Periodicity;
 import com.carlos.finhawk_refac.enums.StatusBill;
 import com.carlos.finhawk_refac.repository.AccountRepository;
 import com.carlos.finhawk_refac.repository.BillRepository;
@@ -16,6 +17,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -84,20 +87,73 @@ public class BillService {
             throw new RuntimeException("Category must belong to the same account");
         }
 
-        Bill bill = new Bill();
-        bill.setDescription(dto.description());
-        bill.setEmission(dto.emission());
-        bill.setMaturity(dto.maturity());
-        bill.setInstallmentAmount(dto.installmentAmount() != null ? dto.installmentAmount() : BigDecimal.ZERO);
-        bill.setInstallmentCount(dto.installmentCount() != null ? dto.installmentCount() : 1);
-        bill.setCurrentInstallment(1);
-        bill.setPeriodicity(dto.periodicity());
-        bill.setStatus(dto.status() != null ? dto.status() : StatusBill.PENDING);
-        bill.setCategory(category);
-        bill.setAccount(account);
+        // Define quantas parcelas serão criadas (mínimo 1)
+        int totalInstallments = (dto.installmentCount() != null && dto.installmentCount() > 0) ? dto.installmentCount() : 1;
 
-        Bill saved = billRepository.save(bill);
-        return toResponseDTO(saved);
+        List<Bill> billsToSave = new ArrayList<>();
+
+        for (int i = 0; i < totalInstallments; i++) {
+            Bill bill = new Bill();
+
+            // Copia os dados básicos
+            bill.setDescription(dto.description());
+            bill.setEmission(dto.emission());
+            bill.setInstallmentAmount(dto.installmentAmount() != null ? dto.installmentAmount() : BigDecimal.ZERO);
+            bill.setInstallmentCount(totalInstallments);
+            bill.setPeriodicity(dto.periodicity());
+            bill.setCategory(category);
+            bill.setAccount(account);
+
+            // Define o número da parcela atual (i começa em 0, então somamos 1)
+            bill.setCurrentInstallment(i + 1);
+
+            // === LÓGICA DE DATA DE VENCIMENTO ===
+            LocalDate maturityDate = dto.maturity();
+
+            // Se não for a primeira parcela, calcula a nova data
+            if (i > 0) {
+                switch (dto.periodicity()) {
+                    case MONTHLY:
+                        maturityDate = maturityDate.plusMonths(i);
+                        break;
+                    case BIMONTHLY:
+                        maturityDate = maturityDate.plusMonths(i * 2L);
+                        break;
+                    case QUARTERLY:
+                        maturityDate = maturityDate.plusMonths(i * 3L);
+                        break;
+                    case SEMIANNUAL:
+                        maturityDate = maturityDate.plusMonths(i * 6L);
+                        break;
+                    case ANNUAL:
+                        maturityDate = maturityDate.plusYears(i);
+                        break;
+                    // Caso padrão (se adicionar outros no futuro) cai aqui
+                    default:
+                        maturityDate = maturityDate.plusMonths(i);
+                        break;
+                }
+            }
+            bill.setMaturity(maturityDate);
+
+            // === LÓGICA DE STATUS ===
+            // A primeira parcela pega o status que veio do front (Ex: PAGO ou PENDENTE).
+            // As parcelas futuras (2, 3...) nascem sempre como PENDENTE,
+            // a não ser que você queira que todas nasçam como pagas (se for o caso, remova o if).
+            if (i == 0) {
+                bill.setStatus(dto.status() != null ? dto.status() : StatusBill.PENDING);
+            } else {
+                bill.setStatus(StatusBill.PENDING);
+            }
+
+            billsToSave.add(bill);
+        }
+
+        // Salva todas as parcelas no banco de uma vez
+        List<Bill> savedBills = billRepository.saveAll(billsToSave);
+
+        // Retorna o DTO da primeira parcela criada para o front-end exibir feedback
+        return toResponseDTO(savedBills.get(0));
     }
 
     /* ===================== UPDATE ===================== */
