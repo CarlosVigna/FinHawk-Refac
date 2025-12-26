@@ -14,5 +14,7 @@ public record BillResponseDTO(
         Integer installmentCount,
         Integer currentInstallment,
         StatusBill status,
-        CategoryResponseDTO category) {
+        Long accountId,
+        CategoryResponseDTO category
+) {
 }

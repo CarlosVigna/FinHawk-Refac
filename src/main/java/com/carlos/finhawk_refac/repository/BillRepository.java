@@ -10,7 +10,7 @@ import java.util.List;
 
 @Repository
 public interface BillRepository extends JpaRepository<Bill, Long> {
-    List<Bill> findAllByAccount(Account account);
+    List<Bill> findAllByAccount_Id(Long accountId);
 
     List<Bill> findAllByStatus(StatusBill status);
 

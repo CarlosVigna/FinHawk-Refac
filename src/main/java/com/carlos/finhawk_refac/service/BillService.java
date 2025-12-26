@@ -15,6 +15,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Service
@@ -56,6 +57,7 @@ public class BillService {
                 bill.getInstallmentCount(),
                 bill.getCurrentInstallment(),
                 bill.getStatus(),
+                bill.getAccount().getId(),
                 new CategoryResponseDTO(
                         bill.getCategory().getId(),
                         bill.getCategory().getName(),
@@ -86,7 +88,7 @@ public class BillService {
         bill.setDescription(dto.description());
         bill.setEmission(dto.emission());
         bill.setMaturity(dto.maturity());
-        bill.setInstallmentAmount(dto.installmentAmount());
+        bill.setInstallmentAmount(dto.installmentAmount() != null ? dto.installmentAmount() : BigDecimal.ZERO);
         bill.setInstallmentCount(dto.installmentCount() != null ? dto.installmentCount() : 1);
         bill.setCurrentInstallment(1);
         bill.setPeriodicity(dto.periodicity());
@@ -143,7 +145,7 @@ public class BillService {
         UserAccount currentUser = getAuthenticatedUser();
 
         return accountRepository.findAllByUserAccount(currentUser).stream()
-                .flatMap(account -> billRepository.findAllByAccount(account).stream())
+                .flatMap(account -> billRepository.findAllByAccount_Id(account.getId()).stream())
                 .map(this::toResponseDTO)
                 .toList();
     }
@@ -171,7 +173,9 @@ public class BillService {
             throw new RuntimeException("Access denied");
         }
 
-        return billRepository.findAllByAccount(account).stream()
+        List<Bill> bills = billRepository.findAllByAccount_Id(accountId);
+
+        return bills.stream()
                 .map(this::toResponseDTO)
                 .toList();
     }
@@ -180,7 +184,7 @@ public class BillService {
         UserAccount currentUser = getAuthenticatedUser();
 
         return accountRepository.findAllByUserAccount(currentUser).stream()
-                .flatMap(account -> billRepository.findAllByAccount(account).stream())
+                .flatMap(account -> billRepository.findAllByAccount_Id(account.getId()).stream())
                 .filter(bill -> bill.getStatus() == status)
                 .map(this::toResponseDTO)
                 .toList();
@@ -199,5 +203,4 @@ public class BillService {
 
         billRepository.delete(bill);
     }
-
 }
