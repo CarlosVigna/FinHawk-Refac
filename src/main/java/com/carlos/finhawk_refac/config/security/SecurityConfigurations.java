@@ -33,16 +33,16 @@ public class SecurityConfigurations {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
-                        // ===== ROTAS PÚBLICAS (sem autenticação) =====
                         .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/register").permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // ===== ROTAS RESTRITAS POR ROLE =====
-                        .requestMatchers(HttpMethod.DELETE, "/bill/**").hasRole("ADMIN")
+                        // tudo do bill autenticado
+                        .requestMatchers("/bill/**").authenticated()
+
+                        // mantém user admin se quiser
                         .requestMatchers(HttpMethod.DELETE, "/user/**").hasRole("ADMIN")
 
-                        // ===== TODAS AS OUTRAS ROTAS =====
-                        // Qualquer usuário AUTENTICADO pode acessar
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class)
@@ -54,8 +54,8 @@ public class SecurityConfigurations {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of("http://localhost:5173"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"));
-        configuration.setAllowedHeaders(List.of("*"));
-        configuration.setAllowCredentials(true);
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        configuration.setExposedHeaders(List.of("Authorization"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
