@@ -1,6 +1,5 @@
 package com.carlos.finhawk_refac.service;
 
-
 import com.carlos.finhawk_refac.dto.request.CategoryRequestDTO;
 import com.carlos.finhawk_refac.dto.response.CategoryResponseDTO;
 import com.carlos.finhawk_refac.entity.Account;
@@ -17,6 +16,7 @@ import java.util.List;
 
 @Service
 public class CategoryService {
+
     private final CategoryRepository categoryRepository;
     private final AccountRepository accountRepository;
 
@@ -47,11 +47,7 @@ public class CategoryService {
 
         Category newCategory = new Category();
         newCategory.setName(dto.name());
-
-        newCategory.setType(
-                CategoryType.valueOf(dto.type().toUpperCase())
-        );
-
+        newCategory.setType(CategoryType.valueOf(dto.type().toUpperCase()));
         newCategory.setAccount(account);
 
         Category saved = categoryRepository.save(newCategory);
@@ -84,14 +80,12 @@ public class CategoryService {
             oldCategory.setAccount(newAccount);
         }
 
-        if (dto.name() != null) {
+        if (dto.name() != null && !dto.name().isBlank()) {
             oldCategory.setName(dto.name());
         }
 
-        if (dto.type() != null) {
-            oldCategory.setType(
-                    CategoryType.valueOf(dto.type().toUpperCase())
-            );
+        if (dto.type() != null && !dto.type().isBlank()) {
+            oldCategory.setType(CategoryType.valueOf(dto.type().toUpperCase()));
         }
 
         Category updated = categoryRepository.save(oldCategory);
@@ -103,19 +97,13 @@ public class CategoryService {
         );
     }
 
+    /**
+     * Mantido apenas por compatibilidade.
+     * Retorna vazio de propósito para evitar categorias "globais" entre contas.
+     * No front, use sempre /category/account/{accountId}.
+     */
     public List<CategoryResponseDTO> getAll() {
-        UserAccount currentUser = getAuthenticatedUser();
-
-        List<Account> userAccounts = accountRepository.findAllByUserAccount(currentUser);
-
-        return userAccounts.stream()
-                .flatMap(account -> categoryRepository.findAllByAccount(account).stream())
-                .map(category -> new CategoryResponseDTO(
-                        category.getId(),
-                        category.getName(),
-                        category.getType().name()
-                ))
-                .toList();
+        return List.of();
     }
 
     public CategoryResponseDTO getById(Long id) {
@@ -166,5 +154,4 @@ public class CategoryService {
                 ))
                 .toList();
     }
-
 }
