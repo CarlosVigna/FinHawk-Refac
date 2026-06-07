@@ -60,7 +60,8 @@ public class SecurityConfigurations {
         // ⚠️ IMPORTANTE: usar allowedOriginPatterns
         configuration.setAllowedOriginPatterns(List.of(
                 "http://localhost:5173",
-                "https://fin-hwak-front-refac.vercel.app"
+                "https://fin-hwak-front-refac.vercel.app",
+                "https://finhawk.netlify.app"
         ));
 
         configuration.setAllowedMethods(List.of(

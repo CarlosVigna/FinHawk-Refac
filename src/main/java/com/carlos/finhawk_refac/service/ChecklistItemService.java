@@ -12,17 +12,25 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.time.LocalDate;
+import java.math.BigDecimal;
+import com.carlos.finhawk_refac.dto.response.ChecklistSuggestionDTO;
+import com.carlos.finhawk_refac.entity.Bill;
+import java.util.Comparator;
 
 @Service
 public class ChecklistItemService {
 
     private final ChecklistItemRepository checklistItemRepository;
     private final AccountRepository accountRepository;
+    private final com.carlos.finhawk_refac.repository.BillRepository billRepository;
 
     public ChecklistItemService(ChecklistItemRepository checklistItemRepository,
-                                AccountRepository accountRepository) {
+                                AccountRepository accountRepository,
+                                com.carlos.finhawk_refac.repository.BillRepository billRepository) {
         this.checklistItemRepository = checklistItemRepository;
         this.accountRepository = accountRepository;
+        this.billRepository = billRepository;
     }
 
     private UserAccount getAuthenticatedUser() {
@@ -117,5 +125,35 @@ public class ChecklistItemService {
         }
 
         checklistItemRepository.delete(item);
+    }
+
+    public ChecklistSuggestionDTO getSuggestion(Long checklistId) {
+        UserAccount currentUser = getAuthenticatedUser();
+
+        System.out.println("[ChecklistItemService] getSuggestion called for checklistId=" + checklistId + " by user id=" + currentUser.getId());
+
+        ChecklistItem item = checklistItemRepository.findById(checklistId)
+                .orElseThrow(() -> new RuntimeException("Checklist item not found"));
+
+        System.out.println("[ChecklistItemService] checklist item accountId=" + item.getAccount().getId() + " item.account.userId=" + item.getAccount().getUserAccount().getId());
+
+        if (!item.getAccount().getUserAccount().getId().equals(currentUser.getId())) {
+            System.out.println("[ChecklistItemService] Access denied: checklist owner=" + item.getAccount().getUserAccount().getId() + " requester=" + currentUser.getId());
+            throw new RuntimeException("Access denied");
+        }
+
+        List<Bill> bills = billRepository.findAllByAccount_Id(item.getAccount().getId());
+
+        // Find last bill whose description contains checklist description (case-insensitive)
+        return bills.stream()
+                .filter(b -> b.getDescription() != null && b.getDescription().toLowerCase().contains(item.getDescription().toLowerCase()))
+                .max(Comparator.comparing(Bill::getMaturity))
+                .map(b -> new ChecklistSuggestionDTO(
+                        b.getInstallmentAmount(),
+                        b.getCategory() != null ? b.getCategory().getId() : null,
+                        b.getMaturity(),
+                        b.getDescription()
+                ))
+                .orElse(new ChecklistSuggestionDTO(null, null, null, null));
     }
 }

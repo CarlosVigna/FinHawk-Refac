@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import com.carlos.finhawk_refac.dto.response.ChecklistSuggestionDTO;
 
 @RestController
 @RequestMapping("/checklist")
@@ -38,5 +39,11 @@ public class ChecklistItemController {
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         checklistItemService.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/suggestion")
+    public ResponseEntity<ChecklistSuggestionDTO> getSuggestion(@PathVariable Long id) {
+        ChecklistSuggestionDTO suggestion = checklistItemService.getSuggestion(id);
+        return ResponseEntity.ok(suggestion);
     }
 }

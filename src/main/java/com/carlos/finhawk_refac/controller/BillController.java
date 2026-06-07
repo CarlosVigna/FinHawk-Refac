@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import com.carlos.finhawk_refac.dto.response.DashboardSummaryDTO;
 
 @RestController
 @RequestMapping("/bill")
@@ -44,6 +45,12 @@ public class BillController {
         return ResponseEntity.ok(bills);
     }
 
+    @GetMapping("/dashboard/consolidated")
+    public ResponseEntity<DashboardSummaryDTO> getConsolidated() {
+        DashboardSummaryDTO dto = billService.getConsolidatedSummary();
+        return ResponseEntity.ok(dto);
+    }
+
     @GetMapping("/account/{accountId}/period")
     public ResponseEntity<List<BillResponseDTO>> getAllByAccountAndPeriod(
             @PathVariable Long accountId,
@@ -70,5 +77,15 @@ public class BillController {
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         billService.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/export/account/{accountId}")
+    public ResponseEntity<byte[]> exportAccountCsv(@PathVariable Long accountId) {
+        byte[] csv = billService.exportAccountCsv(accountId);
+        String filename = String.format("finhawk_account_%d.csv", accountId);
+        return ResponseEntity.ok()
+                .header("Content-Type", "text/csv; charset=UTF-8")
+                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .body(csv);
     }
 }

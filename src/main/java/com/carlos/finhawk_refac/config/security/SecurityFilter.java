@@ -32,7 +32,7 @@ public class SecurityFilter extends OncePerRequestFilter {
         if (token != null) {
             var email = tokenService.validateToken(token);
 
-            if (!email.isEmpty()) {
+            if (email != null && !email.isEmpty()) {
                 UserAccount user = userAccountRepository.findByEmail(email)
                         .orElse(null);
 

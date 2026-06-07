@@ -17,8 +17,11 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import com.carlos.finhawk_refac.dto.response.DashboardSummaryDTO;
+import com.carlos.finhawk_refac.dto.response.AccountSummaryDTO;
 
 @Service
 public class BillService {
@@ -62,7 +65,11 @@ public class BillService {
                         bill.getCategory().getId(),
                         bill.getCategory().getName(),
                         bill.getCategory().getType().name()
-                )
+                ),
+                bill.getCreatedAt(),
+                bill.getUpdatedAt(),
+                bill.getPaidAt(),
+                bill.getReceivedAt()
         );
     }
 
@@ -117,7 +124,13 @@ public class BillService {
             bill.setMaturity(maturityDate);
 
             if (i == 0) {
-                bill.setStatus(dto.status() != null ? dto.status() : StatusBill.PENDING);
+                StatusBill initialStatus = dto.status() != null ? dto.status() : StatusBill.PENDING;
+                bill.setStatus(initialStatus);
+                if (initialStatus == StatusBill.PAID) {
+                    bill.setPaidAt(LocalDateTime.now());
+                } else if (initialStatus == StatusBill.RECEIVED) {
+                    bill.setReceivedAt(LocalDateTime.now());
+                }
             } else {
                 bill.setStatus(StatusBill.PENDING);
             }
@@ -153,7 +166,15 @@ public class BillService {
         bill.setCategory(category);
 
         if (dto.status() != null) {
-            bill.setStatus(dto.status());
+            StatusBill newStatus = dto.status();
+            // if transitioning to PAID/RECEIVED set timestamps if not present
+            if (newStatus == StatusBill.PAID && bill.getPaidAt() == null) {
+                bill.setPaidAt(LocalDateTime.now());
+            }
+            if (newStatus == StatusBill.RECEIVED && bill.getReceivedAt() == null) {
+                bill.setReceivedAt(LocalDateTime.now());
+            }
+            bill.setStatus(newStatus);
         }
 
         if (dto.installmentAmount() != null) {
@@ -166,6 +187,86 @@ public class BillService {
 
         Bill updated = billRepository.save(bill);
         return toResponseDTO(updated);
+    }
+
+    public DashboardSummaryDTO getConsolidatedSummary() {
+        UserAccount currentUser = getAuthenticatedUser();
+        List<Account> accounts = accountRepository.findAllByUserAccount(currentUser);
+
+        BigDecimal patrimonio = BigDecimal.ZERO;
+        List<AccountSummaryDTO> summaries = new ArrayList<>();
+
+        for (Account account : accounts) {
+            List<Bill> bills = billRepository.findAllByAccount_Id(account.getId());
+
+            BigDecimal receitasRealizadas = bills.stream()
+                    .filter(b -> b.getStatus() == StatusBill.RECEIVED)
+                    .filter(b -> b.getCategory().getType().name().equals("RECEIPT"))
+                    .map(b -> b.getInstallmentAmount() != null ? b.getInstallmentAmount() : BigDecimal.ZERO)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal despesasRealizadas = bills.stream()
+                    .filter(b -> b.getStatus() == StatusBill.PAID)
+                    .filter(b -> b.getCategory().getType().name().equals("PAYMENT"))
+                    .map(b -> b.getInstallmentAmount() != null ? b.getInstallmentAmount() : BigDecimal.ZERO)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal saldoRealizado = receitasRealizadas.subtract(despesasRealizadas);
+            patrimonio = patrimonio.add(saldoRealizado);
+
+            summaries.add(new AccountSummaryDTO(
+                    account.getId(),
+                    account.getName(),
+                    receitasRealizadas,
+                    despesasRealizadas,
+                    saldoRealizado
+            ));
+        }
+
+        return new DashboardSummaryDTO(
+                patrimonio,
+                accounts.size(),
+                summaries
+        );
+    }
+
+    public byte[] exportAccountCsv(Long accountId) {
+        UserAccount currentUser = getAuthenticatedUser();
+
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+
+        if (!account.getUserAccount().getId().equals(currentUser.getId())) {
+            throw new RuntimeException("Access denied");
+        }
+
+        List<Bill> bills = billRepository.findAllByAccount_Id(accountId);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("descricao;valor;categoria;vencimento;status;conta\n");
+
+        for (Bill b : bills) {
+            String descricao = escapeCsv(b.getDescription());
+            String valor = b.getInstallmentAmount() != null ? b.getInstallmentAmount().toString() : "0";
+            String categoria = b.getCategory() != null ? escapeCsv(b.getCategory().getName()) : "";
+            String vencimento = b.getMaturity() != null ? b.getMaturity().toString() : "";
+            String status = b.getStatus() != null ? b.getStatus().name() : "";
+            String contaNome = account.getName();
+
+            sb.append(String.format("%s;%s;%s;%s;%s;%s\n", descricao, valor, categoria, vencimento, status, escapeCsv(contaNome)));
+        }
+
+        return sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private String escapeCsv(String s) {
+        if (s == null) return "";
+        // Escape quotes by doubling and wrap in quotes if contains separator or quotes
+        if (s.contains(";") || s.contains("\"") || s.contains("\n") || s.contains("\r")) {
+            s = s.replace("\"", "\"\"");
+            return "\"" + s + "\"";
+        }
+        return s;
     }
 
     public List<BillResponseDTO> getAll() {

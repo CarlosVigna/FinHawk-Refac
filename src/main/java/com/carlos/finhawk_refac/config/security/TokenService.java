@@ -9,8 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 
 @Service
 public class TokenService {
@@ -21,10 +20,6 @@ public class TokenService {
     public String generateToken(UserAccount userAccount){
         try{
             Instant expirationDate = genExpirationDate();
-            System.out.println("=== GERANDO TOKEN ===");
-            System.out.println("Data/hora atual: " + LocalDateTime.now());
-            System.out.println("Token expira em: " + expirationDate);
-            System.out.println("Timezone: " + ZoneOffset.of("-03:00"));
 
             Algorithm algorithm = Algorithm.HMAC256(secret);
             String token = JWT.create()
@@ -53,6 +48,6 @@ public class TokenService {
     }
 
     private Instant genExpirationDate(){
-        return LocalDateTime.now().plusHours(2).toInstant(ZoneOffset.of("-03:00"));
+        return Instant.now().plus(2, ChronoUnit.HOURS);
     }
 }

@@ -4,6 +4,7 @@ import com.carlos.finhawk_refac.enums.StatusBill;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 public record BillResponseDTO(
         Long id,
@@ -16,5 +17,10 @@ public record BillResponseDTO(
         StatusBill status,
         Long accountId,
         CategoryResponseDTO category
+        ,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt,
+        LocalDateTime paidAt,
+        LocalDateTime receivedAt
 ) {
 }
