@@ -1,4 +1,4 @@
-$env:JAVA_HOME="C:\Users\jose.garcia\.jdks\ms-17.0.19"
+$env:JAVA_HOME="C:\Users\garci\.jdks\ms-17.0.17"
 $env:Path="$env:JAVA_HOME\bin;$env:Path"
 
 $env:DATABASE_URL="jdbc:postgresql://ep-patient-cake-ahsqct6g-pooler.c-3.us-east-1.aws.neon.tech:5432/neondb?sslmode=require"
