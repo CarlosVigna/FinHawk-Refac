@@ -93,6 +93,10 @@ public class BillService {
             throw new RuntimeException("Category must belong to the same account");
         }
 
+        if (category.getDeletedAt() != null) {
+            throw new RuntimeException("Category not found");
+        }
+
         int totalInstallments = (dto.installmentCount() != null && dto.installmentCount() > 0)
                 ? dto.installmentCount()
                 : 1;
@@ -161,6 +165,10 @@ public class BillService {
 
         if (!category.getAccount().getId().equals(bill.getAccount().getId())) {
             throw new RuntimeException("Category must belong to the same account");
+        }
+
+        if (category.getDeletedAt() != null) {
+            throw new RuntimeException("Category not found");
         }
 
         bill.setDescription(dto.description());
@@ -335,6 +343,30 @@ public class BillService {
                 .filter(bill -> bill.getStatus() == status)
                 .map(this::toResponseDTO)
                 .toList();
+    }
+
+    @Transactional
+    public BillResponseDTO updateStatus(Long id, StatusBill newStatus) {
+        UserAccount currentUser = getAuthenticatedUser();
+
+        Bill bill = billRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Bill not found"));
+
+        if (!bill.getAccount().getUserAccount().getId().equals(currentUser.getId())) {
+            throw new RuntimeException("You are not allowed to update this bill");
+        }
+
+        if (newStatus == StatusBill.PAID && bill.getPaidAt() == null) {
+            bill.setPaidAt(LocalDateTime.now());
+        }
+        if (newStatus == StatusBill.RECEIVED && bill.getReceivedAt() == null) {
+            bill.setReceivedAt(LocalDateTime.now());
+        }
+
+        bill.setStatus(newStatus);
+
+        Bill updated = billRepository.save(bill);
+        return toResponseDTO(updated);
     }
 
     @Transactional

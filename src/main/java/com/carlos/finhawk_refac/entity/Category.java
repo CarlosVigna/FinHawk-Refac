@@ -1,6 +1,5 @@
 package com.carlos.finhawk_refac.entity;
 
-
 import com.carlos.finhawk_refac.enums.CategoryType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -8,15 +7,15 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
-@Table(name="category")
+@Table(name = "category")
 @AllArgsConstructor
 @NoArgsConstructor
 @Setter
 @Getter
-
 public class Category {
 
     @Id
@@ -34,4 +33,7 @@ public class Category {
     @ManyToOne
     @JoinColumn(name = "account_id")
     private Account account;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
 }

@@ -13,6 +13,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -73,6 +74,10 @@ public class CategoryService {
             throw new RuntimeException("You are not allowed to update this category");
         }
 
+        if (oldCategory.getDeletedAt() != null) {
+            throw new RuntimeException("Category not found or archived");
+        }
+
         if (dto.accountId() != null && !dto.accountId().equals(oldCategory.getAccount().getId())) {
             Account newAccount = accountRepository.findById(dto.accountId())
                     .orElseThrow(() -> new RuntimeException("Account not found"));
@@ -120,6 +125,10 @@ public class CategoryService {
             throw new RuntimeException("Access denied");
         }
 
+        if (category.getDeletedAt() != null) {
+            throw new RuntimeException("Category not found");
+        }
+
         return new CategoryResponseDTO(
                 category.getId(),
                 category.getName(),
@@ -138,7 +147,8 @@ public class CategoryService {
             throw new RuntimeException("You are not allowed to delete this category");
         }
 
-        categoryRepository.delete(category);
+        category.setDeletedAt(LocalDateTime.now());
+        categoryRepository.save(category);
     }
 
     public List<CategoryResponseDTO> getAllByAccountId(Long accountId) {
@@ -151,7 +161,7 @@ public class CategoryService {
             throw new RuntimeException("Access denied");
         }
 
-        return categoryRepository.findAllByAccount(account).stream()
+        return categoryRepository.findAllByAccountAndDeletedAtIsNull(account).stream()
                 .map(category -> new CategoryResponseDTO(
                         category.getId(),
                         category.getName(),

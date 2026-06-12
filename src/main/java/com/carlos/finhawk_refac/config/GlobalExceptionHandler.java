@@ -36,6 +36,11 @@ public class GlobalExceptionHandler {
                     .body(new ErrorResponse(422, "Unprocessable Entity", msg));
         }
 
+        if (msg.toLowerCase().contains("inválido") || msg.toLowerCase().contains("invalid")) {
+            return ResponseEntity.status(400)
+                    .body(new ErrorResponse(400, "Bad Request", msg));
+        }
+
         return ResponseEntity.status(500)
                 .body(new ErrorResponse(500, "Internal Server Error", "An unexpected error occurred"));
     }

@@ -1,23 +1,27 @@
 package com.carlos.finhawk_refac.service;
 
 import com.carlos.finhawk_refac.dto.request.ChecklistItemRequestDTO;
+import com.carlos.finhawk_refac.dto.response.ChecklistCompletionResponseDTO;
 import com.carlos.finhawk_refac.dto.response.ChecklistItemResponseDTO;
+import com.carlos.finhawk_refac.dto.response.ChecklistSuggestionDTO;
 import com.carlos.finhawk_refac.entity.Account;
+import com.carlos.finhawk_refac.entity.Bill;
+import com.carlos.finhawk_refac.entity.ChecklistCompletion;
 import com.carlos.finhawk_refac.entity.ChecklistItem;
 import com.carlos.finhawk_refac.entity.UserAccount;
 import com.carlos.finhawk_refac.repository.AccountRepository;
+import com.carlos.finhawk_refac.repository.BillRepository;
+import com.carlos.finhawk_refac.repository.ChecklistCompletionRepository;
 import com.carlos.finhawk_refac.repository.ChecklistItemRepository;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.time.LocalDate;
-import java.math.BigDecimal;
-import com.carlos.finhawk_refac.dto.response.ChecklistSuggestionDTO;
-import com.carlos.finhawk_refac.entity.Bill;
+import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
 
 @Service
 @Transactional(readOnly = true)
@@ -25,14 +29,17 @@ public class ChecklistItemService {
 
     private final ChecklistItemRepository checklistItemRepository;
     private final AccountRepository accountRepository;
-    private final com.carlos.finhawk_refac.repository.BillRepository billRepository;
+    private final BillRepository billRepository;
+    private final ChecklistCompletionRepository checklistCompletionRepository;
 
     public ChecklistItemService(ChecklistItemRepository checklistItemRepository,
                                 AccountRepository accountRepository,
-                                com.carlos.finhawk_refac.repository.BillRepository billRepository) {
+                                BillRepository billRepository,
+                                ChecklistCompletionRepository checklistCompletionRepository) {
         this.checklistItemRepository = checklistItemRepository;
         this.accountRepository = accountRepository;
         this.billRepository = billRepository;
+        this.checklistCompletionRepository = checklistCompletionRepository;
     }
 
     private UserAccount getAuthenticatedUser() {
@@ -53,6 +60,21 @@ public class ChecklistItemService {
                 item.getActive(),
                 item.getAccount().getId()
         );
+    }
+
+    private ChecklistCompletionResponseDTO toCompletionResponseDTO(ChecklistCompletion c) {
+        return new ChecklistCompletionResponseDTO(
+                c.getId(),
+                c.getChecklistItem().getId(),
+                c.getMonth(),
+                c.getCompletedAt()
+        );
+    }
+
+    private void validateMonth(String month) {
+        if (month == null || !month.matches("^\\d{4}-(0[1-9]|1[0-2])$")) {
+            throw new RuntimeException("Formato de mês inválido. Esperado: YYYY-MM (ex: 2026-06)");
+        }
     }
 
     @Transactional
@@ -113,7 +135,7 @@ public class ChecklistItemService {
             throw new RuntimeException("Access denied");
         }
 
-        return checklistItemRepository.findAllByAccount_IdOrderByDueDayAsc(accountId).stream()
+        return checklistItemRepository.findAllByAccount_IdAndActiveTrueOrderByDueDayAsc(accountId).stream()
                 .map(this::toResponseDTO)
                 .toList();
     }
@@ -129,7 +151,8 @@ public class ChecklistItemService {
             throw new RuntimeException("Access denied");
         }
 
-        checklistItemRepository.delete(item);
+        item.setActive(false);
+        checklistItemRepository.save(item);
     }
 
     public ChecklistSuggestionDTO getSuggestion(Long checklistId) {
@@ -144,9 +167,9 @@ public class ChecklistItemService {
 
         List<Bill> bills = billRepository.findAllByAccount_Id(item.getAccount().getId());
 
-        // Find last bill whose description contains checklist description (case-insensitive)
         return bills.stream()
-                .filter(b -> b.getDescription() != null && b.getDescription().toLowerCase().contains(item.getDescription().toLowerCase()))
+                .filter(b -> b.getDescription() != null
+                        && b.getDescription().toLowerCase().contains(item.getDescription().toLowerCase()))
                 .max(Comparator.comparing(Bill::getMaturity))
                 .map(b -> new ChecklistSuggestionDTO(
                         b.getInstallmentAmount(),
@@ -155,5 +178,79 @@ public class ChecklistItemService {
                         b.getDescription()
                 ))
                 .orElse(new ChecklistSuggestionDTO(null, null, null, null));
+    }
+
+    // ===== Conclusão mensal =====
+
+    public record MarkCompletionResult(ChecklistCompletionResponseDTO dto, boolean created) {}
+
+    @Transactional
+    public MarkCompletionResult markComplete(Long itemId, String month) {
+        validateMonth(month);
+        UserAccount currentUser = getAuthenticatedUser();
+
+        ChecklistItem item = checklistItemRepository.findById(itemId)
+                .orElseThrow(() -> new RuntimeException("Checklist item not found"));
+
+        if (!item.getAccount().getUserAccount().getId().equals(currentUser.getId())) {
+            throw new RuntimeException("Access denied");
+        }
+
+        if (Boolean.FALSE.equals(item.getActive())) {
+            throw new RuntimeException("Checklist item not found");
+        }
+
+        Optional<ChecklistCompletion> existing = checklistCompletionRepository
+                .findByChecklistItem_IdAndMonth(itemId, month);
+
+        if (existing.isPresent()) {
+            return new MarkCompletionResult(toCompletionResponseDTO(existing.get()), false);
+        }
+
+        ChecklistCompletion completion = new ChecklistCompletion();
+        completion.setChecklistItem(item);
+        completion.setMonth(month);
+        completion.setCompletedAt(LocalDateTime.now());
+
+        return new MarkCompletionResult(toCompletionResponseDTO(checklistCompletionRepository.save(completion)), true);
+    }
+
+    @Transactional
+    public void unmarkComplete(Long itemId, String month) {
+        validateMonth(month);
+        UserAccount currentUser = getAuthenticatedUser();
+
+        ChecklistItem item = checklistItemRepository.findById(itemId)
+                .orElseThrow(() -> new RuntimeException("Checklist item not found"));
+
+        if (!item.getAccount().getUserAccount().getId().equals(currentUser.getId())) {
+            throw new RuntimeException("Access denied");
+        }
+
+        if (Boolean.FALSE.equals(item.getActive())) {
+            throw new RuntimeException("Checklist item not found");
+        }
+
+        checklistCompletionRepository
+                .findByChecklistItem_IdAndMonth(itemId, month)
+                .ifPresent(checklistCompletionRepository::delete);
+    }
+
+    public List<Long> getCompletedItemIds(Long accountId, String month) {
+        validateMonth(month);
+        UserAccount currentUser = getAuthenticatedUser();
+
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+
+        if (!account.getUserAccount().getId().equals(currentUser.getId())) {
+            throw new RuntimeException("Access denied");
+        }
+
+        return checklistCompletionRepository
+                .findActiveByAccountIdAndMonth(accountId, month)
+                .stream()
+                .map(c -> c.getChecklistItem().getId())
+                .toList();
     }
 }

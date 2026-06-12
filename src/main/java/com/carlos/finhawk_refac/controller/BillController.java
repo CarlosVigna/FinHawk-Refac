@@ -2,6 +2,7 @@ package com.carlos.finhawk_refac.controller;
 
 import com.carlos.finhawk_refac.dto.response.BillResponseDTO;
 import com.carlos.finhawk_refac.dto.request.BillRequestDTO;
+import com.carlos.finhawk_refac.dto.request.BillStatusUpdateRequest;
 import com.carlos.finhawk_refac.enums.StatusBill;
 import com.carlos.finhawk_refac.service.BillService;
 import org.springframework.http.ResponseEntity;
@@ -30,6 +31,12 @@ public class BillController {
     @PutMapping("/{id}")
     public ResponseEntity<BillResponseDTO> update(@PathVariable Long id, @RequestBody BillRequestDTO dto) {
         BillResponseDTO updated = billService.update(id, dto);
+        return ResponseEntity.ok(updated);
+    }
+
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<BillResponseDTO> updateStatus(@PathVariable Long id, @RequestBody BillStatusUpdateRequest dto) {
+        BillResponseDTO updated = billService.updateStatus(id, dto.status());
         return ResponseEntity.ok(updated);
     }
 
