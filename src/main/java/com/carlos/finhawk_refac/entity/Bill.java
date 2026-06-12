@@ -33,7 +33,7 @@ public class Bill {
     @Column(nullable = false)
     private LocalDate maturity;
 
-    @Column(name = "installment_amount", nullable = false)
+    @Column(name = "installment_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal installmentAmount;
 
     @Column(name = "parcel_number")

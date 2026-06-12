@@ -9,10 +9,12 @@ import com.carlos.finhawk_refac.repository.UserAccountRepository;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
+@Transactional(readOnly = true)
 public class AccountService {
 
     private final AccountRepository accountRepository;
@@ -33,6 +35,7 @@ public class AccountService {
         return (UserAccount) authentication.getPrincipal();
     }
 
+    @Transactional
     public AccountResponseDTO create(AccountRequestDTO dto) {
         UserAccount currentUser = getAuthenticatedUser();
 
@@ -50,6 +53,7 @@ public class AccountService {
         );
     }
 
+    @Transactional
     public AccountResponseDTO update(Long id, AccountRequestDTO dto) {
         UserAccount currentUser = getAuthenticatedUser();
 
@@ -100,6 +104,7 @@ public class AccountService {
         );
     }
 
+    @Transactional
     public void delete(Long id) {
         UserAccount currentUser = getAuthenticatedUser();
 

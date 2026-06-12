@@ -10,6 +10,7 @@ import com.carlos.finhawk_refac.repository.ChecklistItemRepository;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.time.LocalDate;
@@ -19,6 +20,7 @@ import com.carlos.finhawk_refac.entity.Bill;
 import java.util.Comparator;
 
 @Service
+@Transactional(readOnly = true)
 public class ChecklistItemService {
 
     private final ChecklistItemRepository checklistItemRepository;
@@ -53,6 +55,7 @@ public class ChecklistItemService {
         );
     }
 
+    @Transactional
     public ChecklistItemResponseDTO create(ChecklistItemRequestDTO dto) {
         UserAccount currentUser = getAuthenticatedUser();
 
@@ -73,6 +76,7 @@ public class ChecklistItemService {
         return toResponseDTO(saved);
     }
 
+    @Transactional
     public ChecklistItemResponseDTO update(Long id, ChecklistItemRequestDTO dto) {
         UserAccount currentUser = getAuthenticatedUser();
 
@@ -114,6 +118,7 @@ public class ChecklistItemService {
                 .toList();
     }
 
+    @Transactional
     public void delete(Long id) {
         UserAccount currentUser = getAuthenticatedUser();
 
@@ -130,15 +135,10 @@ public class ChecklistItemService {
     public ChecklistSuggestionDTO getSuggestion(Long checklistId) {
         UserAccount currentUser = getAuthenticatedUser();
 
-        System.out.println("[ChecklistItemService] getSuggestion called for checklistId=" + checklistId + " by user id=" + currentUser.getId());
-
         ChecklistItem item = checklistItemRepository.findById(checklistId)
                 .orElseThrow(() -> new RuntimeException("Checklist item not found"));
 
-        System.out.println("[ChecklistItemService] checklist item accountId=" + item.getAccount().getId() + " item.account.userId=" + item.getAccount().getUserAccount().getId());
-
         if (!item.getAccount().getUserAccount().getId().equals(currentUser.getId())) {
-            System.out.println("[ChecklistItemService] Access denied: checklist owner=" + item.getAccount().getUserAccount().getId() + " requester=" + currentUser.getId());
             throw new RuntimeException("Access denied");
         }
 

@@ -14,6 +14,7 @@ import com.carlos.finhawk_refac.repository.CategoryRepository;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -24,6 +25,7 @@ import com.carlos.finhawk_refac.dto.response.DashboardSummaryDTO;
 import com.carlos.finhawk_refac.dto.response.AccountSummaryDTO;
 
 @Service
+@Transactional(readOnly = true)
 public class BillService {
 
     private final BillRepository billRepository;
@@ -73,6 +75,7 @@ public class BillService {
         );
     }
 
+    @Transactional
     public BillResponseDTO create(BillRequestDTO dto) {
         UserAccount currentUser = getAuthenticatedUser();
 
@@ -142,6 +145,7 @@ public class BillService {
         return toResponseDTO(savedBills.get(0));
     }
 
+    @Transactional
     public BillResponseDTO update(Long id, BillRequestDTO dto) {
         UserAccount currentUser = getAuthenticatedUser();
 
@@ -333,6 +337,7 @@ public class BillService {
                 .toList();
     }
 
+    @Transactional
     public void delete(Long id) {
         UserAccount currentUser = getAuthenticatedUser();
 

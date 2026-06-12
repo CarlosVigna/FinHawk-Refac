@@ -49,7 +49,7 @@ public class AuthenticationController {
 
         String encryptedPassword = new BCryptPasswordEncoder().encode(data.password());
 
-        var role = data.role() != null ? data.role() : UserRole.ADMIN;
+        var role = UserRole.VIEWER;
 
         UserAccount newUser = new UserAccount(
                 data.name(),

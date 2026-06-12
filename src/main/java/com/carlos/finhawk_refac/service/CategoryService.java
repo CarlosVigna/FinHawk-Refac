@@ -11,10 +11,12 @@ import com.carlos.finhawk_refac.repository.CategoryRepository;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
+@Transactional(readOnly = true)
 public class CategoryService {
 
     private final CategoryRepository categoryRepository;
@@ -35,6 +37,7 @@ public class CategoryService {
         return (UserAccount) authentication.getPrincipal();
     }
 
+    @Transactional
     public CategoryResponseDTO create(CategoryRequestDTO dto) {
         UserAccount currentUser = getAuthenticatedUser();
 
@@ -59,6 +62,7 @@ public class CategoryService {
         );
     }
 
+    @Transactional
     public CategoryResponseDTO update(Long id, CategoryRequestDTO dto) {
         UserAccount currentUser = getAuthenticatedUser();
 
@@ -123,6 +127,7 @@ public class CategoryService {
         );
     }
 
+    @Transactional
     public void delete(Long id) {
         UserAccount currentUser = getAuthenticatedUser();
 
