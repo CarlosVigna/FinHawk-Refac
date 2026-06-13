@@ -124,6 +124,7 @@ public class UserAccountService {
                                 b.getInstallmentCount(),
                                 b.getCurrentInstallment(),
                                 b.getStatus(),
+                                b.getPeriodicity(),
                                 b.getAccount().getId(),
                                 new CategoryResponseDTO(
                                         b.getCategory().getId(),

@@ -62,6 +62,7 @@ public class BillService {
                 bill.getInstallmentCount(),
                 bill.getCurrentInstallment(),
                 bill.getStatus(),
+                bill.getPeriodicity(),
                 bill.getAccount().getId(),
                 new CategoryResponseDTO(
                         bill.getCategory().getId(),

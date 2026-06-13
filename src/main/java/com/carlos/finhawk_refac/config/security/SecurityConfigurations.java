@@ -1,6 +1,5 @@
 package com.carlos.finhawk_refac.config.security;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -23,8 +22,11 @@ import java.util.List;
 @EnableWebSecurity
 public class SecurityConfigurations {
 
-    @Autowired
-    private SecurityFilter securityFilter;
+    private final SecurityFilter securityFilter;
+
+    public SecurityConfigurations(SecurityFilter securityFilter) {
+        this.securityFilter = securityFilter;
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity) throws Exception {
@@ -35,23 +37,14 @@ public class SecurityConfigurations {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authorizeHttpRequests(authorize -> authorize
-                        // 🔓 Rotas públicas
                         .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/register").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/forgot-password").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/reset-password").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-
-                        // 🔐 Rotas autenticadas
                         .requestMatchers("/bill/**").authenticated()
-
-                        // 🔑 Autoexclusão — deve vir ANTES da regra ADMIN abaixo
                         .requestMatchers(HttpMethod.DELETE, "/user/me").authenticated()
-
-                        // 🔒 Admin (se quiser manter)
                         .requestMatchers(HttpMethod.DELETE, "/user/**").hasRole("ADMIN")
-
-                        // 🔐 Qualquer outra rota precisa estar autenticado
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class)
@@ -62,7 +55,6 @@ public class SecurityConfigurations {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // ⚠️ IMPORTANTE: usar allowedOriginPatterns
         configuration.setAllowedOriginPatterns(List.of(
                 "http://localhost:5173",
                 "https://fin-hwak-front-refac.vercel.app",
@@ -70,11 +62,7 @@ public class SecurityConfigurations {
         ));
 
         configuration.setAllowedMethods(List.of(
-                "GET",
-                "POST",
-                "PUT",
-                "DELETE",
-                "OPTIONS"
+                "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"
         ));
 
         configuration.setAllowedHeaders(List.of("*"));

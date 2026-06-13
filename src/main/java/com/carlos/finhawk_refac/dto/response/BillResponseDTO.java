@@ -1,5 +1,6 @@
 package com.carlos.finhawk_refac.dto.response;
 
+import com.carlos.finhawk_refac.enums.Periodicity;
 import com.carlos.finhawk_refac.enums.StatusBill;
 
 import java.math.BigDecimal;
@@ -15,6 +16,7 @@ public record BillResponseDTO(
         Integer installmentCount,
         Integer currentInstallment,
         StatusBill status,
+        Periodicity periodicity,
         Long accountId,
         CategoryResponseDTO category
         ,
