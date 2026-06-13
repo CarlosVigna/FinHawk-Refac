@@ -9,6 +9,7 @@ import com.carlos.finhawk_refac.dto.response.LoginResponseDTO;
 import com.carlos.finhawk_refac.entity.UserAccount;
 import com.carlos.finhawk_refac.enums.UserRole;
 import com.carlos.finhawk_refac.repository.UserAccountRepository;
+import com.carlos.finhawk_refac.service.EmailService;
 import com.carlos.finhawk_refac.service.PasswordResetService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -30,25 +31,47 @@ public class AuthenticationController {
     private final TokenService tokenService;
     private final PasswordResetService passwordResetService;
     private final PasswordEncoder passwordEncoder;
+    private final EmailService emailService;
 
     public AuthenticationController(AuthenticationManager authenticationManager,
                                     UserAccountRepository userAccountRepository,
                                     TokenService tokenService,
                                     PasswordResetService passwordResetService,
-                                    PasswordEncoder passwordEncoder) {
+                                    PasswordEncoder passwordEncoder,
+                                    EmailService emailService) {
         this.authenticationManager = authenticationManager;
         this.userAccountRepository = userAccountRepository;
         this.tokenService = tokenService;
         this.passwordResetService = passwordResetService;
         this.passwordEncoder = passwordEncoder;
+        this.emailService = emailService;
     }
 
     @PostMapping("/login")
     public ResponseEntity login(@RequestBody @Valid AuthenticationDTO data) {
         var usernamePassword = new UsernamePasswordAuthenticationToken(data.email(), data.password());
         var auth = this.authenticationManager.authenticate(usernamePassword);
-        var token = tokenService.generateToken((UserAccount) auth.getPrincipal());
-        return ResponseEntity.ok(new LoginResponseDTO(token));
+        UserAccount user = (UserAccount) auth.getPrincipal();
+        String token = tokenService.generateToken(user);
+        String refreshToken = tokenService.generateRefreshToken(user);
+        return ResponseEntity.ok(new LoginResponseDTO(token, refreshToken));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity refresh(@RequestBody java.util.Map<String, String> body) {
+        String refreshToken = body.get("refreshToken");
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return ResponseEntity.badRequest().body("Missing refreshToken");
+        }
+        String email = tokenService.validateRefreshToken(refreshToken);
+        if (email == null) {
+            return ResponseEntity.status(401).body("Invalid or expired refresh token");
+        }
+        UserAccount user = (UserAccount) userAccountRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        String newToken = tokenService.generateToken(user);
+        String newRefreshToken = tokenService.generateRefreshToken(user);
+        return ResponseEntity.ok(new LoginResponseDTO(newToken, newRefreshToken));
     }
 
     @PostMapping("/register")
@@ -67,6 +90,8 @@ public class AuthenticationController {
         );
 
         this.userAccountRepository.save(newUser);
+
+        emailService.sendWelcomeEmail(newUser.getEmail(), newUser.getName());
 
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }

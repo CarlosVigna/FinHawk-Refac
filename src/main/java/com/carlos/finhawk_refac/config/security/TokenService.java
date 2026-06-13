@@ -19,22 +19,32 @@ public class TokenService {
 
     public String generateToken(UserAccount userAccount){
         try{
-            Instant expirationDate = genExpirationDate();
-
             Algorithm algorithm = Algorithm.HMAC256(secret);
-            String token = JWT.create()
+            return JWT.create()
                     .withIssuer("auth-api")
                     .withSubject(userAccount.getEmail())
                     .withClaim("role", userAccount.getRole().name())
-                    .withExpiresAt(expirationDate)
+                    .withExpiresAt(Instant.now().plus(2, ChronoUnit.HOURS))
                     .sign(algorithm);
-            return token;
         } catch (JWTCreationException exception){
             throw new RuntimeException("Error while generating token ", exception);
         }
     }
 
-    public String validateToken (String token){
+    public String generateRefreshToken(UserAccount userAccount){
+        try{
+            Algorithm algorithm = Algorithm.HMAC256(secret);
+            return JWT.create()
+                    .withIssuer("auth-api-refresh")
+                    .withSubject(userAccount.getEmail())
+                    .withExpiresAt(Instant.now().plus(7, ChronoUnit.DAYS))
+                    .sign(algorithm);
+        } catch (JWTCreationException exception){
+            throw new RuntimeException("Error while generating refresh token ", exception);
+        }
+    }
+
+    public String validateToken(String token){
         try {
             Algorithm algorithm = Algorithm.HMAC256(secret);
             return JWT.require(algorithm)
@@ -47,7 +57,16 @@ public class TokenService {
         }
     }
 
-    private Instant genExpirationDate(){
-        return Instant.now().plus(2, ChronoUnit.HOURS);
+    public String validateRefreshToken(String token){
+        try {
+            Algorithm algorithm = Algorithm.HMAC256(secret);
+            return JWT.require(algorithm)
+                    .withIssuer("auth-api-refresh")
+                    .build()
+                    .verify(token)
+                    .getSubject();
+        } catch (JWTVerificationException exception){
+            return null;
+        }
     }
 }

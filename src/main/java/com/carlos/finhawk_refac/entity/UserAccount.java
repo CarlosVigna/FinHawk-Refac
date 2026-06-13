@@ -1,5 +1,6 @@
 package com.carlos.finhawk_refac.entity;
 
+import com.carlos.finhawk_refac.enums.PlanType;
 import com.carlos.finhawk_refac.enums.UserRole;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
@@ -38,6 +39,10 @@ public class UserAccount implements UserDetails {
     @Enumerated(EnumType.STRING)
     private UserRole role;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private PlanType plan = PlanType.FREE;
+
     @JsonIgnore
     @OneToMany(mappedBy = "userAccount", cascade = CascadeType.ALL)
     private List<Account> accounts;
@@ -47,6 +52,7 @@ public class UserAccount implements UserDetails {
         this.email = email;
         this.password = password;
         this.role = role;
+        this.plan = PlanType.FREE;
     }
 
     @Override

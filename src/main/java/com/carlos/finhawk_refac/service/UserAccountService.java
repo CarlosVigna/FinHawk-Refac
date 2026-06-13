@@ -281,4 +281,29 @@ public class UserAccountService {
     public void deleteCurrentUser(UserAccount user) {
         userAccountRepository.delete(user);
     }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> getPlanInfo(UserAccount user) {
+        long usedAccounts  = accountRepository.countByUserAccount(user);
+        long usedBills     = billRepository.countByAccount_UserAccount_Id(user.getId());
+        long usedChecklist = checklistItemRepository.countByAccount_UserAccount_IdAndActiveTrue(user.getId());
+
+        boolean isPro = user.getPlan().name().equals("PRO");
+
+        Map<String, Object> limits = new HashMap<>();
+        limits.put("accounts",  isPro ? null : 1);
+        limits.put("bills",     isPro ? null : 100);
+        limits.put("checklist", isPro ? null : 5);
+
+        Map<String, Object> usage = new HashMap<>();
+        usage.put("accounts",  usedAccounts);
+        usage.put("bills",     usedBills);
+        usage.put("checklist", usedChecklist);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("plan",   user.getPlan().name());
+        result.put("limits", limits);
+        result.put("usage",  usage);
+        return result;
+    }
 }

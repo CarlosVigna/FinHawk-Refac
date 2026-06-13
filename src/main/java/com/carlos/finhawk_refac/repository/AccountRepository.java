@@ -12,4 +12,5 @@ import java.util.Optional;
 public interface AccountRepository extends JpaRepository<Account, Long> {
     List<Account> findAllByUserAccount(UserAccount userAccount);
     Optional<Account> findByUserAccountAndName(UserAccount userAccount, String name);
+    long countByUserAccount(UserAccount userAccount);
 }

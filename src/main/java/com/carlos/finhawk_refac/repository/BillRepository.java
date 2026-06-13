@@ -23,4 +23,6 @@ public interface BillRepository extends JpaRepository<Bill, Long> {
 
     boolean existsByAccount_IdAndDescriptionAndMaturityAndInstallmentAmount(
             Long accountId, String description, LocalDate maturity, BigDecimal installmentAmount);
+
+    long countByAccount_UserAccount_Id(Long userId);
 }

@@ -11,6 +11,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/user")
 public class UserAccountController {
@@ -52,5 +54,10 @@ public class UserAccountController {
     public ResponseEntity<Void> importData(@RequestBody UserDataImportDTO dto) {
         userAccountService.importUserData(dto);
         return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/plan")
+    public ResponseEntity<Map<String, Object>> getPlan(@AuthenticationPrincipal UserAccount userAccount) {
+        return ResponseEntity.ok(userAccountService.getPlanInfo(userAccount));
     }
 }

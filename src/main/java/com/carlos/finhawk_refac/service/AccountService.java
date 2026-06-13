@@ -19,10 +19,14 @@ public class AccountService {
 
     private final AccountRepository accountRepository;
     private final UserAccountRepository userAccountRepository;
+    private final PlanLimitService planLimitService;
 
-    public AccountService(AccountRepository accountRepository, UserAccountRepository userAccountRepository) {
+    public AccountService(AccountRepository accountRepository,
+                          UserAccountRepository userAccountRepository,
+                          PlanLimitService planLimitService) {
         this.accountRepository = accountRepository;
         this.userAccountRepository = userAccountRepository;
+        this.planLimitService = planLimitService;
     }
 
     private UserAccount getAuthenticatedUser() {
@@ -38,6 +42,7 @@ public class AccountService {
     @Transactional
     public AccountResponseDTO create(AccountRequestDTO dto) {
         UserAccount currentUser = getAuthenticatedUser();
+        planLimitService.checkAccountLimit(currentUser);
 
         Account newAccount = new Account();
         newAccount.setName(dto.name());

@@ -13,4 +13,6 @@ public interface ChecklistItemRepository extends JpaRepository<ChecklistItem, Lo
     List<ChecklistItem> findAllByAccount_Id(Long accountId);
 
     boolean existsByAccount_IdAndDescriptionAndActiveTrue(Long accountId, String description);
+
+    long countByAccount_UserAccount_IdAndActiveTrue(Long userId);
 }

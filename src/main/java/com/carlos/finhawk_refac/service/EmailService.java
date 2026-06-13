@@ -24,6 +24,30 @@ public class EmailService {
         this.mailSender = mailSender;
     }
 
+    public void sendWelcomeEmail(String to, String name) {
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(fromAddress);
+            message.setTo(to);
+            message.setSubject("Bem-vindo ao FinHawk!");
+            message.setText(
+                "Ola, " + name + "!\n\n" +
+                "Sua conta no FinHawk foi criada com sucesso.\n\n" +
+                "Acesse o app em: " + frontendUrl + "/login\n\n" +
+                "Com o FinHawk voce tem:\n" +
+                "- Dashboard em tempo real\n" +
+                "- Semaforo de vencimentos\n" +
+                "- Checklist mensal\n" +
+                "- Graficos e relatorios\n\n" +
+                "Qualquer duvida, fale com a gente.\n\n" +
+                "FinHawk"
+            );
+            mailSender.send(message);
+        } catch (Exception e) {
+            log.error("Falha ao enviar e-mail de boas-vindas para {}: {}", to, e.getMessage());
+        }
+    }
+
     public void sendPasswordResetEmail(String to, String token) {
         try {
             SimpleMailMessage message = new SimpleMailMessage();
