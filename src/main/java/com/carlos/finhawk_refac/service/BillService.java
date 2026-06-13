@@ -242,54 +242,6 @@ public class BillService {
         );
     }
 
-    public byte[] exportAccountCsv(Long accountId) {
-        UserAccount currentUser = getAuthenticatedUser();
-
-        Account account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new RuntimeException("Account not found"));
-
-        if (!account.getUserAccount().getId().equals(currentUser.getId())) {
-            throw new RuntimeException("Access denied");
-        }
-
-        List<Bill> bills = billRepository.findAllByAccount_Id(accountId);
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("descricao;valor;categoria;vencimento;status;conta\n");
-
-        for (Bill b : bills) {
-            String descricao = escapeCsv(b.getDescription());
-            String valor = b.getInstallmentAmount() != null ? b.getInstallmentAmount().toString() : "0";
-            String categoria = b.getCategory() != null ? escapeCsv(b.getCategory().getName()) : "";
-            String vencimento = b.getMaturity() != null ? b.getMaturity().toString() : "";
-            String status = b.getStatus() != null ? b.getStatus().name() : "";
-            String contaNome = account.getName();
-
-            sb.append(String.format("%s;%s;%s;%s;%s;%s\n", descricao, valor, categoria, vencimento, status, escapeCsv(contaNome)));
-        }
-
-        return sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
-    }
-
-    private String escapeCsv(String s) {
-        if (s == null) return "";
-        // Escape quotes by doubling and wrap in quotes if contains separator or quotes
-        if (s.contains(";") || s.contains("\"") || s.contains("\n") || s.contains("\r")) {
-            s = s.replace("\"", "\"\"");
-            return "\"" + s + "\"";
-        }
-        return s;
-    }
-
-    public List<BillResponseDTO> getAll() {
-        UserAccount currentUser = getAuthenticatedUser();
-
-        return accountRepository.findAllByUserAccount(currentUser).stream()
-                .flatMap(account -> billRepository.findAllByAccount_Id(account.getId()).stream())
-                .map(this::toResponseDTO)
-                .toList();
-    }
-
     public BillResponseDTO getById(Long id) {
         UserAccount currentUser = getAuthenticatedUser();
 
@@ -331,16 +283,6 @@ public class BillService {
         }
 
         return billRepository.findAllByAccount_IdAndMaturityBetween(accountId, start, end).stream()
-                .map(this::toResponseDTO)
-                .toList();
-    }
-
-    public List<BillResponseDTO> getAllByStatus(StatusBill status) {
-        UserAccount currentUser = getAuthenticatedUser();
-
-        return accountRepository.findAllByUserAccount(currentUser).stream()
-                .flatMap(account -> billRepository.findAllByAccount_Id(account.getId()).stream())
-                .filter(bill -> bill.getStatus() == status)
                 .map(this::toResponseDTO)
                 .toList();
     }

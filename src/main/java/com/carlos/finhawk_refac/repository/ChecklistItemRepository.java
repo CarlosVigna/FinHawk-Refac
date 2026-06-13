@@ -9,4 +9,8 @@ import java.util.List;
 @Repository
 public interface ChecklistItemRepository extends JpaRepository<ChecklistItem, Long> {
     List<ChecklistItem> findAllByAccount_IdAndActiveTrueOrderByDueDayAsc(Long accountId);
+
+    List<ChecklistItem> findAllByAccount_Id(Long accountId);
+
+    boolean existsByAccount_IdAndDescriptionAndActiveTrue(Long accountId, String description);
 }

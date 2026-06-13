@@ -106,15 +106,6 @@ public class CategoryService {
         );
     }
 
-    /**
-     * Mantido apenas por compatibilidade.
-     * Retorna vazio de propósito para evitar categorias "globais" entre contas.
-     * No front, use sempre /category/account/{accountId}.
-     */
-    public List<CategoryResponseDTO> getAll() {
-        return List.of();
-    }
-
     public CategoryResponseDTO getById(Long id) {
         UserAccount currentUser = getAuthenticatedUser();
 

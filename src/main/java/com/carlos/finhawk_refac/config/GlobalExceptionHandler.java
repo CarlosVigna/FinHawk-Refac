@@ -1,5 +1,6 @@
 package com.carlos.finhawk_refac.config;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -36,6 +37,11 @@ public class GlobalExceptionHandler {
                     .body(new ErrorResponse(422, "Unprocessable Entity", msg));
         }
 
+        if (msg.contains("already registered")) {
+            return ResponseEntity.status(400)
+                    .body(new ErrorResponse(400, "Bad Request", msg));
+        }
+
         if (msg.toLowerCase().contains("inválido") || msg.toLowerCase().contains("invalid")) {
             return ResponseEntity.status(400)
                     .body(new ErrorResponse(400, "Bad Request", msg));
@@ -43,6 +49,12 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.status(500)
                 .body(new ErrorResponse(500, "Internal Server Error", "An unexpected error occurred"));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse(400, "Bad Request", ex.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

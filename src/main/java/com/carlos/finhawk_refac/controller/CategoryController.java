@@ -36,12 +36,6 @@ public class CategoryController {
         return ResponseEntity.ok(category);
     }
 
-    @GetMapping
-    public ResponseEntity<List<CategoryResponseDTO>> getAll() {
-        List<CategoryResponseDTO> categories = categoryService.getAll();
-        return ResponseEntity.ok(categories);
-    }
-
     @GetMapping("/account/{accountId}")
     public ResponseEntity<List<CategoryResponseDTO>> getAllByAccountId(@PathVariable Long accountId) {
         List<CategoryResponseDTO> categories = categoryService.getAllByAccountId(accountId);

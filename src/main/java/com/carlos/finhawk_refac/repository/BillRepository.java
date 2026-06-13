@@ -6,6 +6,7 @@ import com.carlos.finhawk_refac.enums.StatusBill;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -19,4 +20,7 @@ public interface BillRepository extends JpaRepository<Bill, Long> {
     List<Bill> findAllByAccountAndStatus(Account account, StatusBill status);
 
     List<Bill> findAllByAccount_IdAndMaturityBetween(Long accountId, LocalDate start, LocalDate end);
+
+    boolean existsByAccount_IdAndDescriptionAndMaturityAndInstallmentAmount(
+            Long accountId, String description, LocalDate maturity, BigDecimal installmentAmount);
 }

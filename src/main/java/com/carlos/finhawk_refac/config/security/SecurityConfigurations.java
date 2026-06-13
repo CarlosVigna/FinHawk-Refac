@@ -45,6 +45,9 @@ public class SecurityConfigurations {
                         // 🔐 Rotas autenticadas
                         .requestMatchers("/bill/**").authenticated()
 
+                        // 🔑 Autoexclusão — deve vir ANTES da regra ADMIN abaixo
+                        .requestMatchers(HttpMethod.DELETE, "/user/me").authenticated()
+
                         // 🔒 Admin (se quiser manter)
                         .requestMatchers(HttpMethod.DELETE, "/user/**").hasRole("ADMIN")
 
