@@ -3,9 +3,10 @@ package com.carlos.finhawk_refac.controller;
 
 import com.carlos.finhawk_refac.dto.request.UserAccountRequestDTO;
 import com.carlos.finhawk_refac.dto.response.UserAccountResponseDTO;
+import com.carlos.finhawk_refac.entity.UserAccount;
 import com.carlos.finhawk_refac.service.UserAccountService;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,7 +21,15 @@ public class UserAccountController {
         this.userAccountService = userAccountService;
     }
 
-
+    @GetMapping("/me")
+    public ResponseEntity<UserAccountResponseDTO> getMe(@AuthenticationPrincipal UserAccount userAccount) {
+        return ResponseEntity.ok(new UserAccountResponseDTO(
+                userAccount.getId(),
+                userAccount.getName(),
+                userAccount.getEmail(),
+                userAccount.getRole().name()
+        ));
+    }
 
     @PutMapping("/{id}")
     public ResponseEntity<UserAccountResponseDTO> update(@PathVariable Long id, @RequestBody UserAccountRequestDTO dto){

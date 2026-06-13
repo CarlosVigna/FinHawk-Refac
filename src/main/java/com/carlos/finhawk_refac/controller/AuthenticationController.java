@@ -2,11 +2,14 @@ package com.carlos.finhawk_refac.controller;
 
 import com.carlos.finhawk_refac.config.security.TokenService;
 import com.carlos.finhawk_refac.dto.AuthenticationDTO;
+import com.carlos.finhawk_refac.dto.ForgotPasswordDTO;
 import com.carlos.finhawk_refac.dto.RegisterDTO;
+import com.carlos.finhawk_refac.dto.ResetPasswordDTO;
 import com.carlos.finhawk_refac.dto.response.LoginResponseDTO;
 import com.carlos.finhawk_refac.entity.UserAccount;
 import com.carlos.finhawk_refac.enums.UserRole;
 import com.carlos.finhawk_refac.repository.UserAccountRepository;
+import com.carlos.finhawk_refac.service.PasswordResetService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -30,6 +33,9 @@ public class AuthenticationController {
 
     @Autowired
     private TokenService tokenService;
+
+    @Autowired
+    private PasswordResetService passwordResetService;
 
     @PostMapping("/login")
     public ResponseEntity login(@RequestBody @Valid AuthenticationDTO data){
@@ -60,6 +66,18 @@ public class AuthenticationController {
 
         this.userAccountRepository.save(newUser);
 
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity forgotPassword(@RequestBody @Valid ForgotPasswordDTO data) {
+        passwordResetService.requestReset(data.email());
+        return ResponseEntity.ok().build(); // AO-01: always 200, never reveal e-mail existence
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity resetPassword(@RequestBody @Valid ResetPasswordDTO data) {
+        passwordResetService.resetPassword(data.token(), data.newPassword());
         return ResponseEntity.ok().build();
     }
 }

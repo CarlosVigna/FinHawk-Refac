@@ -34,8 +34,6 @@ public class UserAccountService {
             oldUser.setPassword(passwordEncoder.encode(userDto.password()));
         }
 
-        if(userDto.role() != null) oldUser.setRole(userDto.role());
-
         UserAccount updated = userAccountRepository.save(oldUser);
 
         return new UserAccountResponseDTO(
@@ -76,5 +74,12 @@ public class UserAccountService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         userAccountRepository.delete(user);
+    }
+
+    public void updatePassword(Long id, String newPassword) {
+        UserAccount user = userAccountRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userAccountRepository.save(user);
     }
 }
