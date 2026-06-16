@@ -2,6 +2,7 @@ package com.carlos.finhawk_refac.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import java.math.BigDecimal;
 
 @Entity
 @Table(name = "checklist_item")
@@ -26,6 +27,9 @@ public class ChecklistItem {
 
     @Column(nullable = false)
     private Boolean active = true;
+
+    @Column(name = "approximate_value")
+    private BigDecimal approximateValue;
 
     @ManyToOne(optional = false)
     @JoinColumn(name = "account_id")

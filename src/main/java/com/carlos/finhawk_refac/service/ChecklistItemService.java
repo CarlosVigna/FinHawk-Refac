@@ -61,7 +61,8 @@ public class ChecklistItemService {
                 item.getDescription(),
                 item.getDueDay(),
                 item.getActive(),
-                item.getAccount().getId()
+                item.getAccount().getId(),
+                item.getApproximateValue()
         );
     }
 
@@ -97,6 +98,7 @@ public class ChecklistItemService {
         item.setDueDay(dto.dueDay());
         item.setActive(dto.active() != null ? dto.active() : true);
         item.setAccount(account);
+        item.setApproximateValue(dto.approximateValue());
 
         ChecklistItem saved = checklistItemRepository.save(item);
         return toResponseDTO(saved);
@@ -179,9 +181,10 @@ public class ChecklistItemService {
                         b.getInstallmentAmount(),
                         b.getCategory() != null ? b.getCategory().getId() : null,
                         b.getMaturity(),
-                        b.getDescription()
+                        b.getDescription(),
+                        item.getApproximateValue()
                 ))
-                .orElse(new ChecklistSuggestionDTO(null, null, null, null));
+                .orElse(new ChecklistSuggestionDTO(null, null, null, null, item.getApproximateValue()));
     }
 
     // ===== Conclusão mensal =====

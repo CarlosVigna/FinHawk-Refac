@@ -7,7 +7,8 @@ public record ChecklistSuggestionDTO(
         BigDecimal lastAmount,
         Long lastCategoryId,
         LocalDate lastLaunchedAt,
-        String lastDescription
+        String lastDescription,
+        BigDecimal approximateValue
 ) {
 }
 
