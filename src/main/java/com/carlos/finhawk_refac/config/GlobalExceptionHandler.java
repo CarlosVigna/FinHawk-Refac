@@ -2,6 +2,7 @@ package com.carlos.finhawk_refac.config;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -12,6 +13,18 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     record ErrorResponse(int status, String error, String message) {}
+
+    // Spring Security lanca isso (ex: BadCredentialsException) direto do
+    // AuthenticationManager.authenticate() no AuthenticationController --
+    // sem esse handler especifico, cai no fallback generico do
+    // handleRuntimeException abaixo porque a mensagem padrao ("Bad
+    // credentials") nao bate em nenhum dos substrings verificados ali,
+    // e login errado virava 500 em vez de 401.
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthenticationException(AuthenticationException ex) {
+        return ResponseEntity.status(401)
+                .body(new ErrorResponse(401, "Unauthorized", "E-mail ou senha inválidos."));
+    }
 
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ErrorResponse> handleRuntimeException(RuntimeException ex) {
