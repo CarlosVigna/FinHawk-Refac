@@ -4,6 +4,7 @@ import com.carlos.finhawk_refac.dto.request.AccountRequestDTO;
 import com.carlos.finhawk_refac.dto.response.AccountResponseDTO;
 import com.carlos.finhawk_refac.dto.response.UserAccountResponseDTO;
 import com.carlos.finhawk_refac.service.AccountService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,13 +21,13 @@ public class AccountController {
     }
 
     @PostMapping
-    public ResponseEntity<AccountResponseDTO> create (@RequestBody AccountRequestDTO dto){
+    public ResponseEntity<AccountResponseDTO> create (@Valid @RequestBody AccountRequestDTO dto){
         AccountResponseDTO newAccount = accountService.create(dto);
         return ResponseEntity.ok(newAccount);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<AccountResponseDTO> update (@PathVariable Long id, @RequestBody AccountRequestDTO dto){
+    public ResponseEntity<AccountResponseDTO> update (@PathVariable Long id, @Valid @RequestBody AccountRequestDTO dto){
         AccountResponseDTO updated = accountService.update(id, dto);
         return ResponseEntity.ok(updated);
     }

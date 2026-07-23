@@ -6,6 +6,7 @@ import com.carlos.finhawk_refac.dto.response.ChecklistCompletionResponseDTO;
 import com.carlos.finhawk_refac.dto.response.ChecklistItemResponseDTO;
 import com.carlos.finhawk_refac.dto.response.ChecklistSuggestionDTO;
 import com.carlos.finhawk_refac.service.ChecklistItemService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,13 +23,13 @@ public class ChecklistItemController {
     }
 
     @PostMapping
-    public ResponseEntity<ChecklistItemResponseDTO> create(@RequestBody ChecklistItemRequestDTO dto) {
+    public ResponseEntity<ChecklistItemResponseDTO> create(@Valid @RequestBody ChecklistItemRequestDTO dto) {
         return ResponseEntity.ok(checklistItemService.create(dto));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<ChecklistItemResponseDTO> update(@PathVariable Long id,
-                                                           @RequestBody ChecklistItemRequestDTO dto) {
+                                                           @Valid @RequestBody ChecklistItemRequestDTO dto) {
         return ResponseEntity.ok(checklistItemService.update(id, dto));
     }
 

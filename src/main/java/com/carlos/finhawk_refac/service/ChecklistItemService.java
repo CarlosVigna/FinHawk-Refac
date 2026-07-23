@@ -82,6 +82,18 @@ public class ChecklistItemService {
     public ChecklistItemResponseDTO create(ChecklistItemRequestDTO dto) {
         UserAccount currentUser = getAuthenticatedUser();
 
+        if (dto.description() == null || dto.description().isBlank()) {
+            throw new RuntimeException("A descrição é obrigatória.");
+        }
+
+        if (dto.dueDay() == null) {
+            throw new RuntimeException("O dia do vencimento é obrigatório.");
+        }
+
+        if (dto.accountId() == null) {
+            throw new RuntimeException("Account not found");
+        }
+
         Account account = accountRepository.findById(dto.accountId())
                 .orElseThrow(() -> new RuntimeException("Account not found"));
 

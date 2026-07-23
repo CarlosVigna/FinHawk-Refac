@@ -4,6 +4,7 @@ import com.carlos.finhawk_refac.dto.response.BillResponseDTO;
 import com.carlos.finhawk_refac.dto.request.BillRequestDTO;
 import com.carlos.finhawk_refac.dto.request.BillStatusUpdateRequest;
 import com.carlos.finhawk_refac.service.BillService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,13 +23,13 @@ public class BillController {
     }
 
     @PostMapping
-    public ResponseEntity<BillResponseDTO> create(@RequestBody BillRequestDTO dto) {
+    public ResponseEntity<BillResponseDTO> create(@Valid @RequestBody BillRequestDTO dto) {
         BillResponseDTO newBill = billService.create(dto);
         return ResponseEntity.ok(newBill);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<BillResponseDTO> update(@PathVariable Long id, @RequestBody BillRequestDTO dto) {
+    public ResponseEntity<BillResponseDTO> update(@PathVariable Long id, @Valid @RequestBody BillRequestDTO dto) {
         BillResponseDTO updated = billService.update(id, dto);
         return ResponseEntity.ok(updated);
     }

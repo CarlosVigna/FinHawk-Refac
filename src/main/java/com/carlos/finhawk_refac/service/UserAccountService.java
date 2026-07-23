@@ -272,6 +272,11 @@ public class UserAccountService {
         }
     }
 
+    // ATENCAO: sem checagem de dono/autenticacao de proposito -- so deve ser
+    // chamado com um id que ja veio de uma fonte confiavel e pre-validada
+    // (hoje: PasswordResetService, apos validar token de reset expirado/
+    // uso unico). NUNCA exponha isso direto num controller recebendo id do
+    // path/body sem antes confirmar contra o usuario autenticado.
     public void updatePassword(Long id, String newPassword) {
         UserAccount user = userAccountRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));

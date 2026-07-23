@@ -42,6 +42,18 @@ public class CategoryService {
     public CategoryResponseDTO create(CategoryRequestDTO dto) {
         UserAccount currentUser = getAuthenticatedUser();
 
+        if (dto.name() == null || dto.name().isBlank()) {
+            throw new RuntimeException("O nome da categoria é obrigatório.");
+        }
+
+        if (dto.type() == null || dto.type().isBlank()) {
+            throw new RuntimeException("O tipo da categoria é obrigatório.");
+        }
+
+        if (dto.accountId() == null) {
+            throw new RuntimeException("Account not found");
+        }
+
         Account account = accountRepository.findById(dto.accountId())
                 .orElseThrow(() -> new RuntimeException("Account not found"));
 

@@ -4,6 +4,15 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+### Segredos / credenciais locais -- NUNCA commitar ###
+local-env.ps1
+local-env.sh
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
 ### STS ###
 .apt_generated
 .classpath

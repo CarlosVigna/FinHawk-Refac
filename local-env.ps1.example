@@ -1,0 +1,20 @@
+# Copie este arquivo para local-env.ps1 (que fica fora do git, veja .gitignore)
+# e preencha com os valores reais do SEU ambiente local. NUNCA commite
+# local-env.ps1 com valores reais -- use sempre credenciais de
+# desenvolvimento/staging aqui, nunca as de producao.
+
+$env:JAVA_HOME="C:\caminho\para\seu\jdk"
+$env:Path="$env:JAVA_HOME\bin;$env:Path"
+
+$env:DATABASE_URL="jdbc:postgresql://localhost:5432/finhawk_dev?sslmode=require"
+$env:DATABASE_USERNAME="seu_usuario"
+$env:DATABASE_PASSWORD="sua_senha"
+
+$env:JWT_SECRET="gere-um-valor-aleatorio-forte-so-para-uso-local"
+
+Write-Host ""
+Write-Host "================================="
+Write-Host " FinHawk Environment Loaded"
+Write-Host "================================="
+Write-Host "JAVA_HOME: $env:JAVA_HOME"
+Write-Host ""

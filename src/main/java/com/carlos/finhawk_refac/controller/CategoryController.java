@@ -3,6 +3,7 @@ package com.carlos.finhawk_refac.controller;
 import com.carlos.finhawk_refac.dto.request.CategoryRequestDTO;
 import com.carlos.finhawk_refac.dto.response.CategoryResponseDTO;
 import com.carlos.finhawk_refac.service.CategoryService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,13 +20,13 @@ public class CategoryController {
     }
 
     @PostMapping
-    public ResponseEntity<CategoryResponseDTO> create(@RequestBody CategoryRequestDTO dto) {
+    public ResponseEntity<CategoryResponseDTO> create(@Valid @RequestBody CategoryRequestDTO dto) {
         CategoryResponseDTO newCategory = categoryService.create(dto);
         return ResponseEntity.ok(newCategory);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<CategoryResponseDTO> update(@PathVariable Long id, @RequestBody CategoryRequestDTO dto) {
+    public ResponseEntity<CategoryResponseDTO> update(@PathVariable Long id, @Valid @RequestBody CategoryRequestDTO dto) {
         CategoryResponseDTO updated = categoryService.update(id, dto);
         return ResponseEntity.ok(updated);
     }
