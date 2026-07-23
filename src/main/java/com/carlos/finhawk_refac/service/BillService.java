@@ -31,18 +31,15 @@ public class BillService {
     private final BillRepository billRepository;
     private final CategoryRepository categoryRepository;
     private final AccountRepository accountRepository;
-    private final PlanLimitService planLimitService;
 
     public BillService(
             BillRepository billRepository,
             CategoryRepository categoryRepository,
-            AccountRepository accountRepository,
-            PlanLimitService planLimitService
+            AccountRepository accountRepository
     ) {
         this.billRepository = billRepository;
         this.categoryRepository = categoryRepository;
         this.accountRepository = accountRepository;
-        this.planLimitService = planLimitService;
     }
 
     private UserAccount getAuthenticatedUser() {
@@ -82,7 +79,6 @@ public class BillService {
     @Transactional
     public BillResponseDTO create(BillRequestDTO dto) {
         UserAccount currentUser = getAuthenticatedUser();
-        planLimitService.checkBillLimit(currentUser);
 
         Account account = accountRepository.findById(dto.accountId())
                 .orElseThrow(() -> new RuntimeException("Account not found"));

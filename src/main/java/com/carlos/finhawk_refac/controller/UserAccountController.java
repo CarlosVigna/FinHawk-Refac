@@ -55,9 +55,4 @@ public class UserAccountController {
         userAccountService.importUserData(dto);
         return ResponseEntity.ok().build();
     }
-
-    @GetMapping("/plan")
-    public ResponseEntity<Map<String, Object>> getPlan(@AuthenticationPrincipal UserAccount userAccount) {
-        return ResponseEntity.ok(userAccountService.getPlanInfo(userAccount));
-    }
 }

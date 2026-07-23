@@ -1,6 +1,5 @@
 package com.carlos.finhawk_refac.config;
 
-import com.carlos.finhawk_refac.exception.PlanLimitException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -13,14 +12,6 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     record ErrorResponse(int status, String error, String message) {}
-
-    record PlanLimitErrorResponse(int status, String error, String message, String limitType) {}
-
-    @ExceptionHandler(PlanLimitException.class)
-    public ResponseEntity<PlanLimitErrorResponse> handlePlanLimit(PlanLimitException ex) {
-        return ResponseEntity.status(402)
-                .body(new PlanLimitErrorResponse(402, "Plan Limit Exceeded", ex.getMessage(), ex.getLimitType()));
-    }
 
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ErrorResponse> handleRuntimeException(RuntimeException ex) {

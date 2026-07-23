@@ -31,18 +31,15 @@ public class ChecklistItemService {
     private final AccountRepository accountRepository;
     private final BillRepository billRepository;
     private final ChecklistCompletionRepository checklistCompletionRepository;
-    private final PlanLimitService planLimitService;
 
     public ChecklistItemService(ChecklistItemRepository checklistItemRepository,
                                 AccountRepository accountRepository,
                                 BillRepository billRepository,
-                                ChecklistCompletionRepository checklistCompletionRepository,
-                                PlanLimitService planLimitService) {
+                                ChecklistCompletionRepository checklistCompletionRepository) {
         this.checklistItemRepository = checklistItemRepository;
         this.accountRepository = accountRepository;
         this.billRepository = billRepository;
         this.checklistCompletionRepository = checklistCompletionRepository;
-        this.planLimitService = planLimitService;
     }
 
     private UserAccount getAuthenticatedUser() {
@@ -84,7 +81,6 @@ public class ChecklistItemService {
     @Transactional
     public ChecklistItemResponseDTO create(ChecklistItemRequestDTO dto) {
         UserAccount currentUser = getAuthenticatedUser();
-        planLimitService.checkChecklistLimit(currentUser);
 
         Account account = accountRepository.findById(dto.accountId())
                 .orElseThrow(() -> new RuntimeException("Account not found"));
