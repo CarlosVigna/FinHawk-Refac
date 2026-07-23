@@ -277,6 +277,7 @@ public class UserAccountService {
     // (hoje: PasswordResetService, apos validar token de reset expirado/
     // uso unico). NUNCA exponha isso direto num controller recebendo id do
     // path/body sem antes confirmar contra o usuario autenticado.
+    @Transactional
     public void updatePassword(Long id, String newPassword) {
         UserAccount user = userAccountRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -284,6 +285,7 @@ public class UserAccountService {
         userAccountRepository.save(user);
     }
 
+    @Transactional
     public void deleteCurrentUser(UserAccount user) {
         userAccountRepository.delete(user);
     }
