@@ -10,11 +10,14 @@ import com.carlos.finhawk_refac.entity.UserAccount;
 import com.carlos.finhawk_refac.enums.UserRole;
 import com.carlos.finhawk_refac.repository.UserAccountRepository;
 import com.carlos.finhawk_refac.service.EmailService;
+import com.carlos.finhawk_refac.service.LoginAttemptService;
 import com.carlos.finhawk_refac.service.PasswordResetService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -32,29 +35,51 @@ public class AuthenticationController {
     private final PasswordResetService passwordResetService;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+    private final LoginAttemptService loginAttemptService;
 
     public AuthenticationController(AuthenticationManager authenticationManager,
                                     UserAccountRepository userAccountRepository,
                                     TokenService tokenService,
                                     PasswordResetService passwordResetService,
                                     PasswordEncoder passwordEncoder,
-                                    EmailService emailService) {
+                                    EmailService emailService,
+                                    LoginAttemptService loginAttemptService) {
         this.authenticationManager = authenticationManager;
         this.userAccountRepository = userAccountRepository;
         this.tokenService = tokenService;
         this.passwordResetService = passwordResetService;
         this.passwordEncoder = passwordEncoder;
         this.emailService = emailService;
+        this.loginAttemptService = loginAttemptService;
     }
 
     @PostMapping("/login")
-    public ResponseEntity login(@RequestBody @Valid AuthenticationDTO data) {
-        var usernamePassword = new UsernamePasswordAuthenticationToken(data.email(), data.password());
-        var auth = this.authenticationManager.authenticate(usernamePassword);
-        UserAccount user = (UserAccount) auth.getPrincipal();
-        String token = tokenService.generateToken(user);
-        String refreshToken = tokenService.generateRefreshToken(user);
-        return ResponseEntity.ok(new LoginResponseDTO(token, refreshToken));
+    public ResponseEntity login(@RequestBody @Valid AuthenticationDTO data, HttpServletRequest request) {
+        String ip = clientIp(request);
+        loginAttemptService.checkAllowed(ip, data.email());
+
+        try {
+            var usernamePassword = new UsernamePasswordAuthenticationToken(data.email(), data.password());
+            var auth = this.authenticationManager.authenticate(usernamePassword);
+            UserAccount user = (UserAccount) auth.getPrincipal();
+            loginAttemptService.registerSuccess(ip, data.email());
+            String token = tokenService.generateToken(user);
+            String refreshToken = tokenService.generateRefreshToken(user);
+            return ResponseEntity.ok(new LoginResponseDTO(token, refreshToken));
+        } catch (AuthenticationException ex) {
+            loginAttemptService.registerFailure(ip, data.email());
+            throw ex;
+        }
+    }
+
+    // Railway/Vercel ficam atras de proxy -- o IP real do cliente vem no
+    // X-Forwarded-For, nao em request.getRemoteAddr() (que seria o proxy).
+    private String clientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 
     @PostMapping("/refresh")

@@ -1,5 +1,6 @@
 package com.carlos.finhawk_refac.config;
 
+import com.carlos.finhawk_refac.exception.TooManyRequestsException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.AuthenticationException;
@@ -13,6 +14,12 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     record ErrorResponse(int status, String error, String message) {}
+
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<ErrorResponse> handleTooManyRequests(TooManyRequestsException ex) {
+        return ResponseEntity.status(429)
+                .body(new ErrorResponse(429, "Too Many Requests", ex.getMessage()));
+    }
 
     // Spring Security lanca isso (ex: BadCredentialsException) direto do
     // AuthenticationManager.authenticate() no AuthenticationController --
