@@ -31,15 +31,18 @@ public class ChecklistItemService {
     private final AccountRepository accountRepository;
     private final BillRepository billRepository;
     private final ChecklistCompletionRepository checklistCompletionRepository;
+    private final AuditLogService auditLogService;
 
     public ChecklistItemService(ChecklistItemRepository checklistItemRepository,
                                 AccountRepository accountRepository,
                                 BillRepository billRepository,
-                                ChecklistCompletionRepository checklistCompletionRepository) {
+                                ChecklistCompletionRepository checklistCompletionRepository,
+                                AuditLogService auditLogService) {
         this.checklistItemRepository = checklistItemRepository;
         this.accountRepository = accountRepository;
         this.billRepository = billRepository;
         this.checklistCompletionRepository = checklistCompletionRepository;
+        this.auditLogService = auditLogService;
     }
 
     private UserAccount getAuthenticatedUser() {
@@ -109,6 +112,9 @@ public class ChecklistItemService {
         item.setApproximateValue(dto.approximateValue());
 
         ChecklistItem saved = checklistItemRepository.save(item);
+
+        auditLogService.record(currentUser, AuditLogService.CREATE, "ChecklistItem", saved.getId(), saved.getDescription());
+
         return toResponseDTO(saved);
     }
 
@@ -136,6 +142,9 @@ public class ChecklistItemService {
         }
 
         ChecklistItem updated = checklistItemRepository.save(item);
+
+        auditLogService.record(currentUser, AuditLogService.UPDATE, "ChecklistItem", updated.getId(), updated.getDescription());
+
         return toResponseDTO(updated);
     }
 
@@ -167,6 +176,8 @@ public class ChecklistItemService {
 
         item.setActive(false);
         checklistItemRepository.save(item);
+
+        auditLogService.record(currentUser, AuditLogService.DELETE, "ChecklistItem", item.getId(), item.getDescription());
     }
 
     public ChecklistSuggestionDTO getSuggestion(Long checklistId) {

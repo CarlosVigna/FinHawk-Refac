@@ -31,15 +31,18 @@ public class BillService {
     private final BillRepository billRepository;
     private final CategoryRepository categoryRepository;
     private final AccountRepository accountRepository;
+    private final AuditLogService auditLogService;
 
     public BillService(
             BillRepository billRepository,
             CategoryRepository categoryRepository,
-            AccountRepository accountRepository
+            AccountRepository accountRepository,
+            AuditLogService auditLogService
     ) {
         this.billRepository = billRepository;
         this.categoryRepository = categoryRepository;
         this.accountRepository = accountRepository;
+        this.auditLogService = auditLogService;
     }
 
     private UserAccount getAuthenticatedUser() {
@@ -147,6 +150,11 @@ public class BillService {
         }
 
         List<Bill> savedBills = billRepository.saveAll(billsToSave);
+
+        for (Bill saved : savedBills) {
+            auditLogService.record(currentUser, AuditLogService.CREATE, "Bill", saved.getId(), saved.getDescription());
+        }
+
         return toResponseDTO(savedBills.get(0));
     }
 
@@ -199,6 +207,9 @@ public class BillService {
         }
 
         Bill updated = billRepository.save(bill);
+
+        auditLogService.record(currentUser, AuditLogService.UPDATE, "Bill", updated.getId(), updated.getDescription());
+
         return toResponseDTO(updated);
     }
 
@@ -309,6 +320,10 @@ public class BillService {
         bill.setStatus(newStatus);
 
         Bill updated = billRepository.save(bill);
+
+        auditLogService.record(currentUser, AuditLogService.UPDATE, "Bill", updated.getId(),
+                updated.getDescription() + " -> status " + newStatus);
+
         return toResponseDTO(updated);
     }
 
@@ -324,5 +339,7 @@ public class BillService {
         }
 
         billRepository.delete(bill);
+
+        auditLogService.record(currentUser, AuditLogService.DELETE, "Bill", bill.getId(), bill.getDescription());
     }
 }

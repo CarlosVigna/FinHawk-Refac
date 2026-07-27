@@ -19,11 +19,14 @@ public class AccountService {
 
     private final AccountRepository accountRepository;
     private final UserAccountRepository userAccountRepository;
+    private final AuditLogService auditLogService;
 
     public AccountService(AccountRepository accountRepository,
-                          UserAccountRepository userAccountRepository) {
+                          UserAccountRepository userAccountRepository,
+                          AuditLogService auditLogService) {
         this.accountRepository = accountRepository;
         this.userAccountRepository = userAccountRepository;
+        this.auditLogService = auditLogService;
     }
 
     private UserAccount getAuthenticatedUser() {
@@ -47,6 +50,8 @@ public class AccountService {
 
         Account saved = accountRepository.save(newAccount);
 
+        auditLogService.record(currentUser, AuditLogService.CREATE, "Account", saved.getId(), saved.getName());
+
         return new AccountResponseDTO(
                 saved.getId(),
                 saved.getName(),
@@ -69,6 +74,8 @@ public class AccountService {
         oldAccount.setPhotoUrl(dto.photoUrl());
 
         Account updated = accountRepository.save(oldAccount);
+
+        auditLogService.record(currentUser, AuditLogService.UPDATE, "Account", updated.getId(), updated.getName());
 
         return new AccountResponseDTO(
                 updated.getId(),
@@ -117,5 +124,7 @@ public class AccountService {
         }
 
         accountRepository.delete(account);
+
+        auditLogService.record(currentUser, AuditLogService.DELETE, "Account", account.getId(), account.getName());
     }
 }

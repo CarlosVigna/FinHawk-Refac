@@ -22,10 +22,13 @@ public class CategoryService {
 
     private final CategoryRepository categoryRepository;
     private final AccountRepository accountRepository;
+    private final AuditLogService auditLogService;
 
-    public CategoryService(CategoryRepository categoryRepository, AccountRepository accountRepository) {
+    public CategoryService(CategoryRepository categoryRepository, AccountRepository accountRepository,
+                            AuditLogService auditLogService) {
         this.categoryRepository = categoryRepository;
         this.accountRepository = accountRepository;
+        this.auditLogService = auditLogService;
     }
 
     private UserAccount getAuthenticatedUser() {
@@ -67,6 +70,8 @@ public class CategoryService {
         newCategory.setAccount(account);
 
         Category saved = categoryRepository.save(newCategory);
+
+        auditLogService.record(currentUser, AuditLogService.CREATE, "Category", saved.getId(), saved.getName());
 
         return new CategoryResponseDTO(
                 saved.getId(),
@@ -111,6 +116,8 @@ public class CategoryService {
 
         Category updated = categoryRepository.save(oldCategory);
 
+        auditLogService.record(currentUser, AuditLogService.UPDATE, "Category", updated.getId(), updated.getName());
+
         return new CategoryResponseDTO(
                 updated.getId(),
                 updated.getName(),
@@ -152,6 +159,8 @@ public class CategoryService {
 
         category.setDeletedAt(LocalDateTime.now());
         categoryRepository.save(category);
+
+        auditLogService.record(currentUser, AuditLogService.DELETE, "Category", category.getId(), category.getName());
     }
 
     public List<CategoryResponseDTO> getAllByAccountId(Long accountId) {
