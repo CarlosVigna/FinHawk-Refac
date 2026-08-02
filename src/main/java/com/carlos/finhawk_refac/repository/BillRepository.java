@@ -25,4 +25,10 @@ public interface BillRepository extends JpaRepository<Bill, Long> {
             Long accountId, String description, LocalDate maturity, BigDecimal installmentAmount);
 
     long countByAccount_UserAccount_Id(Long userId);
+
+    // Usados pelos schedulers de notificacao via WhatsApp -- varrem todas as
+    // contas porque as notificacoes vao pra um unico grupo compartilhado da familia.
+    List<Bill> findAllByMaturityAndStatus(LocalDate maturity, StatusBill status);
+
+    List<Bill> findAllByMaturityBetweenAndStatus(LocalDate start, LocalDate end, StatusBill status);
 }
