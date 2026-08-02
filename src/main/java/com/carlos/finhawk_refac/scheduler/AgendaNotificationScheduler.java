@@ -161,7 +161,8 @@ public class AgendaNotificationScheduler {
 
     // ===== Resumo semanal (domingo, 21h): vencimentos dos proximos 7 dias =====
 
-    @Scheduled(cron = "0 0 21 * * SUN", zone = "America/Sao_Paulo")
+    // TEMPORARIO PRA VALIDACAO PARTE 6 -- cron real e "0 0 21 * * SUN", reverter apos confirmar no grupo.
+    @Scheduled(cron = "0 */2 * * * *", zone = "America/Sao_Paulo")
     @Transactional
     public void weeklySummary() {
         try {
@@ -195,7 +196,8 @@ public class AgendaNotificationScheduler {
 
     // ===== Aviso matinal de vencimento hoje (7h) =====
 
-    @Scheduled(cron = "0 0 7 * * *", zone = "America/Sao_Paulo")
+    // TEMPORARIO PRA VALIDACAO PARTE 6 -- cron real e "0 0 7 * * *", reverter apos confirmar no grupo.
+    @Scheduled(cron = "0 */2 * * * *", zone = "America/Sao_Paulo")
     @Transactional
     public void morningDueToday() {
         try {
