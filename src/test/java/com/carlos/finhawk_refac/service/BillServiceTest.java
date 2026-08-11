@@ -40,6 +40,8 @@ class BillServiceTest {
     private AccountRepository accountRepository;
     @Mock
     private AuditLogService auditLogService;
+    @Mock
+    private WhatsAppNotificationService whatsAppNotificationService;
 
     private BillService billService;
     private UserAccount currentUser;
@@ -47,7 +49,8 @@ class BillServiceTest {
 
     @BeforeEach
     void setUp() {
-        billService = new BillService(billRepository, categoryRepository, accountRepository, auditLogService);
+        billService = new BillService(billRepository, categoryRepository, accountRepository, auditLogService,
+                whatsAppNotificationService);
 
         currentUser = new UserAccount();
         currentUser.setId(1L);
