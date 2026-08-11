@@ -40,10 +40,16 @@ public class AgendaNotificationScheduler {
     private static final ZoneId ZONE = ZoneId.of("America/Sao_Paulo");
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd/MM");
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
+    // Usado nas notificacoes de ciclo de vida (atrasada/fechamento), que
+    // podem se referir a qualquer mes/ano -- diferente do DATE_FMT acima,
+    // que so aparece em avisos de curtissimo prazo ("vence amanha").
+    private static final DateTimeFormatter DATE_FMT_FULL = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("MM/yyyy");
 
     private static final String JOB_NIGHTLY_SUMMARY = "NIGHTLY_SUMMARY";
     private static final String JOB_WEEKLY_SUMMARY = "WEEKLY_SUMMARY";
     private static final String JOB_MORNING_DUE_TODAY = "MORNING_DUE_TODAY";
+    private static final String JOB_OVERDUE_BILLS = "OVERDUE_BILLS";
 
     private final AgendaEventRepository agendaEventRepository;
     private final BillRepository billRepository;
@@ -218,6 +224,41 @@ public class AgendaNotificationScheduler {
             markSent(JOB_MORNING_DUE_TODAY, today);
         } catch (Exception e) {
             log.error("Falha no job de aviso matinal de vencimento: {}", e.getMessage(), e);
+        }
+    }
+
+    // ===== Contas recem-atrasadas (8h): venceram ontem e continuam PENDING =====
+
+    @Scheduled(cron = "0 0 8 * * *", zone = "America/Sao_Paulo")
+    @Transactional
+    public void overdueBills() {
+        try {
+            LocalDate today = LocalDate.now(ZONE);
+
+            if (notificationLogRepository.existsByJobKeyAndReferenceDate(JOB_OVERDUE_BILLS, today)) {
+                return;
+            }
+
+            LocalDate yesterday = today.minusDays(1);
+            List<Bill> bills = billRepository.findAllByMaturityAndStatus(yesterday, StatusBill.PENDING);
+
+            if (!bills.isEmpty()) {
+                StringBuilder sb = new StringBuilder();
+                bills.forEach(b -> {
+                    if (sb.length() > 0) {
+                        sb.append("\n");
+                    }
+                    sb.append("🚨 Atrasada: ").append(b.getDescription())
+                            .append(" — ").append(formatCurrency(b.getInstallmentAmount()))
+                            .append(" (venceu ").append(b.getMaturity().format(DATE_FMT_FULL)).append(").");
+                });
+
+                whatsAppNotificationService.sendMessage(sb.toString());
+            }
+
+            markSent(JOB_OVERDUE_BILLS, today);
+        } catch (Exception e) {
+            log.error("Falha no job de contas recem-atrasadas: {}", e.getMessage(), e);
         }
     }
 
