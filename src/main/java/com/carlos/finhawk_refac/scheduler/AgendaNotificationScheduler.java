@@ -4,6 +4,7 @@ import com.carlos.finhawk_refac.entity.AgendaEvent;
 import com.carlos.finhawk_refac.entity.Bill;
 import com.carlos.finhawk_refac.entity.NotificationLog;
 import com.carlos.finhawk_refac.enums.AgendaEventType;
+import com.carlos.finhawk_refac.enums.CategoryType;
 import com.carlos.finhawk_refac.enums.RecurrenceFrequency;
 import com.carlos.finhawk_refac.enums.StatusBill;
 import com.carlos.finhawk_refac.repository.AgendaEventRepository;
@@ -50,6 +51,7 @@ public class AgendaNotificationScheduler {
     private static final String JOB_WEEKLY_SUMMARY = "WEEKLY_SUMMARY";
     private static final String JOB_MORNING_DUE_TODAY = "MORNING_DUE_TODAY";
     private static final String JOB_OVERDUE_BILLS = "OVERDUE_BILLS";
+    private static final String JOB_MONTHLY_CLOSING = "MONTHLY_CLOSING";
 
     private final AgendaEventRepository agendaEventRepository;
     private final BillRepository billRepository;
@@ -259,6 +261,46 @@ public class AgendaNotificationScheduler {
             markSent(JOB_OVERDUE_BILLS, today);
         } catch (Exception e) {
             log.error("Falha no job de contas recem-atrasadas: {}", e.getMessage(), e);
+        }
+    }
+
+    // ===== Fechamento mensal (dia 1, 9h): resumo do mes anterior =====
+
+    @Scheduled(cron = "0 0 9 1 * *", zone = "America/Sao_Paulo")
+    @Transactional
+    public void monthlyClosing() {
+        try {
+            LocalDate today = LocalDate.now(ZONE);
+
+            if (notificationLogRepository.existsByJobKeyAndReferenceDate(JOB_MONTHLY_CLOSING, today)) {
+                return;
+            }
+
+            LocalDate lastMonth = today.minusMonths(1);
+            LocalDate start = lastMonth.withDayOfMonth(1);
+            LocalDate end = lastMonth.withDayOfMonth(lastMonth.lengthOfMonth());
+
+            BigDecimal entradas = billRepository.findAllByMaturityBetweenAndStatus(start, end, StatusBill.RECEIVED)
+                    .stream()
+                    .filter(b -> b.getCategory().getType() == CategoryType.RECEIPT)
+                    .map(b -> b.getInstallmentAmount() != null ? b.getInstallmentAmount() : BigDecimal.ZERO)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal saidas = billRepository.findAllByMaturityBetweenAndStatus(start, end, StatusBill.PAID)
+                    .stream()
+                    .filter(b -> b.getCategory().getType() == CategoryType.PAYMENT)
+                    .map(b -> b.getInstallmentAmount() != null ? b.getInstallmentAmount() : BigDecimal.ZERO)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal saldo = entradas.subtract(saidas);
+
+            whatsAppNotificationService.sendMessage(
+                    "📊 Fechamento de " + start.format(MONTH_FMT) + ": Entradas " + formatCurrency(entradas)
+                            + ", Saídas " + formatCurrency(saidas) + ", Saldo " + formatCurrency(saldo) + ".");
+
+            markSent(JOB_MONTHLY_CLOSING, today);
+        } catch (Exception e) {
+            log.error("Falha no job de fechamento mensal: {}", e.getMessage(), e);
         }
     }
 
