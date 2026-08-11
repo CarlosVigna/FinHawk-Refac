@@ -7,6 +7,7 @@ import com.carlos.finhawk_refac.enums.AgendaEventType;
 import com.carlos.finhawk_refac.enums.CategoryType;
 import com.carlos.finhawk_refac.enums.RecurrenceFrequency;
 import com.carlos.finhawk_refac.enums.StatusBill;
+import com.carlos.finhawk_refac.repository.AgendaEventCompletionRepository;
 import com.carlos.finhawk_refac.repository.AgendaEventRepository;
 import com.carlos.finhawk_refac.repository.BillRepository;
 import com.carlos.finhawk_refac.repository.NotificationLogRepository;
@@ -23,6 +24,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
@@ -52,18 +55,27 @@ public class AgendaNotificationScheduler {
     private static final String JOB_MORNING_DUE_TODAY = "MORNING_DUE_TODAY";
     private static final String JOB_OVERDUE_BILLS = "OVERDUE_BILLS";
     private static final String JOB_MONTHLY_CLOSING = "MONTHLY_CLOSING";
+    private static final String JOB_HABIT_FORGOTTEN_PREFIX = "HABIT_FORGOTTEN_";
+    // Limiares (em dias, desde a primeira ocorrencia esquecida) em que o
+    // habito esquecido gera aviso -- so nesses dias exatos, pra nao virar
+    // spam diario enquanto o habito continua esquecido.
+    private static final int[] HABIT_FORGOTTEN_THRESHOLDS = {2, 5};
+    private static final int HABIT_FORGOTTEN_MAX_LOOKBACK_DAYS = 30;
 
     private final AgendaEventRepository agendaEventRepository;
     private final BillRepository billRepository;
+    private final AgendaEventCompletionRepository agendaEventCompletionRepository;
     private final NotificationLogRepository notificationLogRepository;
     private final WhatsAppNotificationService whatsAppNotificationService;
 
     public AgendaNotificationScheduler(AgendaEventRepository agendaEventRepository,
                                         BillRepository billRepository,
+                                        AgendaEventCompletionRepository agendaEventCompletionRepository,
                                         NotificationLogRepository notificationLogRepository,
                                         WhatsAppNotificationService whatsAppNotificationService) {
         this.agendaEventRepository = agendaEventRepository;
         this.billRepository = billRepository;
+        this.agendaEventCompletionRepository = agendaEventCompletionRepository;
         this.notificationLogRepository = notificationLogRepository;
         this.whatsAppNotificationService = whatsAppNotificationService;
     }
@@ -302,6 +314,76 @@ public class AgendaNotificationScheduler {
         } catch (Exception e) {
             log.error("Falha no job de fechamento mensal: {}", e.getMessage(), e);
         }
+    }
+
+    // ===== Habito esquecido (20:45, antes do resumo noturno): habitos ativos =====
+    // ===== sem completion ha 2+ dias, avisando de novo so ao cruzar 5 dias =====
+
+    @Scheduled(cron = "0 45 20 * * *", zone = "America/Sao_Paulo")
+    @Transactional
+    public void forgottenHabits() {
+        try {
+            LocalDate today = LocalDate.now(ZONE);
+
+            List<AgendaEvent> habits = agendaEventRepository
+                    .findAllByTypeAndActiveTrueAndDeletedAtIsNull(AgendaEventType.HABIT);
+
+            StringBuilder sb = new StringBuilder();
+
+            for (AgendaEvent habit : habits) {
+                Integer daysSince = daysSinceForgotten(habit, today);
+
+                if (daysSince == null || Arrays.stream(HABIT_FORGOTTEN_THRESHOLDS)
+                        .noneMatch(t -> t == daysSince)) {
+                    continue;
+                }
+
+                String jobKey = JOB_HABIT_FORGOTTEN_PREFIX + habit.getId() + "_" + daysSince;
+                if (notificationLogRepository.existsByJobKeyAndReferenceDate(jobKey, today)) {
+                    continue;
+                }
+
+                if (sb.length() > 0) {
+                    sb.append("\n");
+                }
+                sb.append("⚠️ Você não marcou '").append(habit.getTitle())
+                        .append("' há ").append(daysSince).append(" dia(s).");
+
+                markSent(jobKey, today);
+            }
+
+            if (sb.length() > 0) {
+                whatsAppNotificationService.sendMessage(sb.toString());
+            }
+        } catch (Exception e) {
+            log.error("Falha no job de habito esquecido: {}", e.getMessage(), e);
+        }
+    }
+
+    // Calcula ha quantos dias (a partir de hoje) o habito esta esquecido: anda
+    // pra tras dia a dia a partir de ontem, e para no primeiro dia em que o
+    // habito deveria ter ocorrido e TEM completion registrada (isso limita a
+    // janela) -- dias em que o habito nao deveria ocorrer sao so pulados, nao
+    // interrompem a busca. Retorna null se nao ha nenhum dia esquecido dentro
+    // da janela de MAX_LOOKBACK dias.
+    private Integer daysSinceForgotten(AgendaEvent habit, LocalDate today) {
+        LocalDate earliestMissed = null;
+        LocalDate date = today.minusDays(1);
+
+        for (int scanned = 0; scanned < HABIT_FORGOTTEN_MAX_LOOKBACK_DAYS; scanned++) {
+            if (habitOccursOn(habit, date)) {
+                boolean hasCompletion = agendaEventCompletionRepository
+                        .findByAgendaEvent_IdAndEventDate(habit.getId(), date)
+                        .isPresent();
+                if (hasCompletion) {
+                    break;
+                }
+                earliestMissed = date;
+            }
+            date = date.minusDays(1);
+        }
+
+        return earliestMissed == null ? null : (int) ChronoUnit.DAYS.between(earliestMissed, today);
     }
 
     private void markSent(String jobKey, LocalDate referenceDate) {
