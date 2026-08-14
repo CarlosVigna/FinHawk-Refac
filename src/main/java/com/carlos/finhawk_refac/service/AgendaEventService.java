@@ -18,27 +18,53 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
 @Transactional(readOnly = true)
 public class AgendaEventService {
 
+    private static final DateTimeFormatter DATE_TIME_FMT = DateTimeFormatter.ofPattern("dd/MM 'às' HH:mm");
+    private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
+    private static final Map<DayOfWeek, String> DAY_ABBREV = Map.of(
+            DayOfWeek.MONDAY, "Seg", DayOfWeek.TUESDAY, "Ter", DayOfWeek.WEDNESDAY, "Qua",
+            DayOfWeek.THURSDAY, "Qui", DayOfWeek.FRIDAY, "Sex", DayOfWeek.SATURDAY, "Sáb",
+            DayOfWeek.SUNDAY, "Dom"
+    );
+
     private final AgendaEventRepository agendaEventRepository;
     private final AccountRepository accountRepository;
     private final AgendaEventCompletionRepository agendaEventCompletionRepository;
     private final AuditLogService auditLogService;
+    private final CrudNotificationService crudNotificationService;
 
     public AgendaEventService(AgendaEventRepository agendaEventRepository,
                                AccountRepository accountRepository,
                                AgendaEventCompletionRepository agendaEventCompletionRepository,
-                               AuditLogService auditLogService) {
+                               AuditLogService auditLogService,
+                               CrudNotificationService crudNotificationService) {
         this.agendaEventRepository = agendaEventRepository;
         this.accountRepository = accountRepository;
         this.agendaEventCompletionRepository = agendaEventCompletionRepository;
         this.auditLogService = auditLogService;
+        this.crudNotificationService = crudNotificationService;
+    }
+
+    private String describeSchedule(AgendaEvent event) {
+        if (event.getType() == AgendaEventType.ONE_TIME) {
+            return "em " + event.getEventDateTime().format(DATE_TIME_FMT);
+        }
+        String time = event.getTimeOfDay().format(TIME_FMT);
+        if (event.getRecurrenceFrequency() == RecurrenceFrequency.WEEKLY) {
+            String days = event.getDaysOfWeek().stream().map(DAY_ABBREV::get).reduce((a, b) -> a + ", " + b).orElse("");
+            return "às " + time + " (" + days + ")";
+        }
+        return "todo dia às " + time;
     }
 
     private UserAccount getAuthenticatedUser() {
@@ -140,6 +166,8 @@ public class AgendaEventService {
         AgendaEvent saved = agendaEventRepository.save(event);
 
         auditLogService.record(currentUser, AuditLogService.CREATE, "AgendaEvent", saved.getId(), saved.getTitle());
+        String kind = saved.getType() == AgendaEventType.ONE_TIME ? "Evento" : "Hábito";
+        crudNotificationService.notify("🆕 " + kind + " criado: " + saved.getTitle() + " " + describeSchedule(saved));
 
         return toResponseDTO(saved);
     }
@@ -164,6 +192,7 @@ public class AgendaEventService {
         UserAccount currentUser = getAuthenticatedUser();
 
         AgendaEvent event = findOwned(id, currentUser);
+        boolean wasActive = event.getActive();
 
         if (dto.title() != null && !dto.title().isBlank()) {
             event.setTitle(dto.title());
@@ -216,6 +245,15 @@ public class AgendaEventService {
 
         auditLogService.record(currentUser, AuditLogService.UPDATE, "AgendaEvent", updated.getId(), updated.getTitle());
 
+        if (wasActive != updated.getActive()) {
+            crudNotificationService.notify(updated.getActive()
+                    ? "▶️ Hábito reativado: " + updated.getTitle()
+                    : "⏸️ Hábito pausado: " + updated.getTitle());
+        } else {
+            String kind = updated.getType() == AgendaEventType.ONE_TIME ? "Evento" : "Hábito";
+            crudNotificationService.notify("✏️ " + kind + " atualizado: " + updated.getTitle() + " " + describeSchedule(updated));
+        }
+
         return toResponseDTO(updated);
     }
 
@@ -246,6 +284,8 @@ public class AgendaEventService {
         agendaEventRepository.save(event);
 
         auditLogService.record(currentUser, AuditLogService.DELETE, "AgendaEvent", event.getId(), event.getTitle());
+        String kind = event.getType() == AgendaEventType.ONE_TIME ? "Evento" : "Hábito";
+        crudNotificationService.notify("🗑️ " + kind + " apagado: " + event.getTitle());
     }
 
     // ===== Conclusão diária (hábitos) =====

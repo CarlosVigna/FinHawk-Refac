@@ -17,10 +17,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import com.carlos.finhawk_refac.dto.response.DashboardSummaryDTO;
 import com.carlos.finhawk_refac.dto.response.AccountSummaryDTO;
 
@@ -32,17 +34,25 @@ public class BillService {
     private final CategoryRepository categoryRepository;
     private final AccountRepository accountRepository;
     private final AuditLogService auditLogService;
+    private final CrudNotificationService crudNotificationService;
 
     public BillService(
             BillRepository billRepository,
             CategoryRepository categoryRepository,
             AccountRepository accountRepository,
-            AuditLogService auditLogService
+            AuditLogService auditLogService,
+            CrudNotificationService crudNotificationService
     ) {
         this.billRepository = billRepository;
         this.categoryRepository = categoryRepository;
         this.accountRepository = accountRepository;
         this.auditLogService = auditLogService;
+        this.crudNotificationService = crudNotificationService;
+    }
+
+    private static String formatCurrency(BigDecimal value) {
+        NumberFormat fmt = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
+        return fmt.format(value != null ? value : BigDecimal.ZERO);
     }
 
     private UserAccount getAuthenticatedUser() {
@@ -153,6 +163,9 @@ public class BillService {
 
         for (Bill saved : savedBills) {
             auditLogService.record(currentUser, AuditLogService.CREATE, "Bill", saved.getId(), saved.getDescription());
+            crudNotificationService.notify("🆕 Lançamento criado: " + saved.getDescription()
+                    + " — " + formatCurrency(saved.getInstallmentAmount())
+                    + " — vence " + saved.getMaturity());
         }
 
         return toResponseDTO(savedBills.get(0));
@@ -209,6 +222,9 @@ public class BillService {
         Bill updated = billRepository.save(bill);
 
         auditLogService.record(currentUser, AuditLogService.UPDATE, "Bill", updated.getId(), updated.getDescription());
+        crudNotificationService.notify("✏️ Lançamento atualizado: " + updated.getDescription()
+                + " — " + formatCurrency(updated.getInstallmentAmount())
+                + " — vence " + updated.getMaturity());
 
         return toResponseDTO(updated);
     }
@@ -324,6 +340,14 @@ public class BillService {
         auditLogService.record(currentUser, AuditLogService.UPDATE, "Bill", updated.getId(),
                 updated.getDescription() + " -> status " + newStatus);
 
+        String statusEmoji = switch (newStatus) {
+            case PAID -> "✅ Pago";
+            case RECEIVED -> "💰 Recebido";
+            case PENDING -> "↩️ Voltou para pendente";
+        };
+        crudNotificationService.notify(statusEmoji + ": " + updated.getDescription()
+                + " — " + formatCurrency(updated.getInstallmentAmount()));
+
         return toResponseDTO(updated);
     }
 
@@ -341,5 +365,7 @@ public class BillService {
         billRepository.delete(bill);
 
         auditLogService.record(currentUser, AuditLogService.DELETE, "Bill", bill.getId(), bill.getDescription());
+        crudNotificationService.notify("🗑️ Lançamento apagado: " + bill.getDescription()
+                + " — " + formatCurrency(bill.getInstallmentAmount()));
     }
 }
