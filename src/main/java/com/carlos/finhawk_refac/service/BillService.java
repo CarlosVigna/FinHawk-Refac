@@ -193,6 +193,10 @@ public class BillService {
             throw new RuntimeException("Category not found");
         }
 
+        StatusBill oldStatus = bill.getStatus();
+        BigDecimal oldAmount = bill.getInstallmentAmount();
+        LocalDate oldMaturity = bill.getMaturity();
+
         bill.setDescription(dto.description());
         bill.setEmission(dto.emission());
         bill.setMaturity(dto.maturity());
@@ -222,11 +226,44 @@ public class BillService {
         Bill updated = billRepository.save(bill);
 
         auditLogService.record(currentUser, AuditLogService.UPDATE, "Bill", updated.getId(), updated.getDescription());
-        crudNotificationService.notify("✏️ Lançamento atualizado: " + updated.getDescription()
-                + " — " + formatCurrency(updated.getInstallmentAmount())
-                + " — vence " + updated.getMaturity());
+        notifyUpdate(updated, oldStatus, oldAmount, oldMaturity);
 
         return toResponseDTO(updated);
+    }
+
+    // Prioridade: 1) status virou PAID/RECEIVED -> so a mensagem de pago/recebido
+    // (editado seria redundante); 2) valor ou vencimento mudou -> editado, com
+    // antes/depois; 3) so campos "cosmeticos" (descricao/categoria/etc) mudaram
+    // -> nao notifica, nao ha nada relevante pro grupo saber.
+    private void notifyUpdate(Bill updated, StatusBill oldStatus, BigDecimal oldAmount, LocalDate oldMaturity) {
+        boolean becamePaidOrReceived = oldStatus != updated.getStatus()
+                && (updated.getStatus() == StatusBill.PAID || updated.getStatus() == StatusBill.RECEIVED);
+
+        if (becamePaidOrReceived) {
+            String statusEmoji = updated.getStatus() == StatusBill.PAID ? "✅ Pago" : "💰 Recebido";
+            crudNotificationService.notify(statusEmoji + ": " + updated.getDescription()
+                    + " — " + formatCurrency(updated.getInstallmentAmount()));
+            return;
+        }
+
+        boolean amountChanged = oldAmount == null ? updated.getInstallmentAmount() != null
+                : oldAmount.compareTo(updated.getInstallmentAmount()) != 0;
+        boolean maturityChanged = !oldMaturity.equals(updated.getMaturity());
+
+        if (!amountChanged && !maturityChanged) {
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder("✏️ Editado: " + updated.getDescription());
+        if (amountChanged) {
+            sb.append(" — valor mudou de ").append(formatCurrency(oldAmount))
+                    .append(" pra ").append(formatCurrency(updated.getInstallmentAmount()));
+        }
+        if (maturityChanged) {
+            sb.append(" — vencimento mudou de ").append(oldMaturity)
+                    .append(" pra ").append(updated.getMaturity());
+        }
+        crudNotificationService.notify(sb.toString());
     }
 
     public DashboardSummaryDTO getConsolidatedSummary() {

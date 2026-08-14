@@ -193,6 +193,11 @@ public class AgendaEventService {
 
         AgendaEvent event = findOwned(id, currentUser);
         boolean wasActive = event.getActive();
+        String oldTitle = event.getTitle();
+        LocalDateTime oldEventDateTime = event.getEventDateTime();
+        RecurrenceFrequency oldRecurrenceFrequency = event.getRecurrenceFrequency();
+        java.time.LocalTime oldTimeOfDay = event.getTimeOfDay();
+        List<DayOfWeek> oldDaysOfWeek = event.getDaysOfWeek();
 
         if (dto.title() != null && !dto.title().isBlank()) {
             event.setTitle(dto.title());
@@ -245,13 +250,25 @@ public class AgendaEventService {
 
         auditLogService.record(currentUser, AuditLogService.UPDATE, "AgendaEvent", updated.getId(), updated.getTitle());
 
+        // Prioridade: 1) active mudou -> so pausar/reativar (nunca junto com
+        // "editado", seria redundante); 2) titulo/horario/agendamento mudou
+        // -> editado; 3) so a descricao mudou (ou nada mudou de fato) -> nao
+        // notifica, nada relevante pro grupo saber.
         if (wasActive != updated.getActive()) {
             crudNotificationService.notify(updated.getActive()
                     ? "▶️ Hábito reativado: " + updated.getTitle()
                     : "⏸️ Hábito pausado: " + updated.getTitle());
         } else {
-            String kind = updated.getType() == AgendaEventType.ONE_TIME ? "Evento" : "Hábito";
-            crudNotificationService.notify("✏️ " + kind + " atualizado: " + updated.getTitle() + " " + describeSchedule(updated));
+            boolean scheduleChanged = !java.util.Objects.equals(oldTitle, updated.getTitle())
+                    || !java.util.Objects.equals(oldEventDateTime, updated.getEventDateTime())
+                    || !java.util.Objects.equals(oldRecurrenceFrequency, updated.getRecurrenceFrequency())
+                    || !java.util.Objects.equals(oldTimeOfDay, updated.getTimeOfDay())
+                    || !java.util.Objects.equals(oldDaysOfWeek, updated.getDaysOfWeek());
+
+            if (scheduleChanged) {
+                String kind = updated.getType() == AgendaEventType.ONE_TIME ? "Evento" : "Hábito";
+                crudNotificationService.notify("✏️ " + kind + " atualizado: " + updated.getTitle() + " " + describeSchedule(updated));
+            }
         }
 
         return toResponseDTO(updated);
