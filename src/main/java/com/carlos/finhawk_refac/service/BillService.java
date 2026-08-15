@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -29,6 +30,8 @@ import com.carlos.finhawk_refac.dto.response.AccountSummaryDTO;
 @Service
 @Transactional(readOnly = true)
 public class BillService {
+
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private final BillRepository billRepository;
     private final CategoryRepository categoryRepository;
@@ -53,6 +56,82 @@ public class BillService {
     private static String formatCurrency(BigDecimal value) {
         NumberFormat fmt = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
         return fmt.format(value != null ? value : BigDecimal.ZERO);
+    }
+
+    private static String statusLabel(StatusBill status) {
+        return switch (status) {
+            case PENDING -> "Pendente";
+            case PAID -> "Pago";
+            case RECEIVED -> "Recebido";
+        };
+    }
+
+    private static void appendCategoryLine(StringBuilder sb, Bill bill) {
+        if (bill.getCategory() != null && bill.getCategory().getName() != null) {
+            sb.append("\n🏷️ ").append(bill.getCategory().getName());
+        }
+    }
+
+    // ===== Mensagens de notificacao (formato completo, aprovado pelo usuario) =====
+
+    private String buildCreatedMessage(Bill bill) {
+        StringBuilder sb = new StringBuilder("🆕 Novo lançamento");
+        sb.append("\n📝 ").append(bill.getDescription());
+        appendCategoryLine(sb, bill);
+        sb.append("\n💰 ").append(formatCurrency(bill.getInstallmentAmount()));
+        sb.append("\n📅 Vence em ").append(bill.getMaturity().format(DATE_FMT));
+        sb.append("\n📌 Status: ").append(statusLabel(bill.getStatus()));
+        return sb.toString();
+    }
+
+    private String buildPaidMessage(Bill bill) {
+        StringBuilder sb = new StringBuilder("✅ Pagamento confirmado");
+        sb.append("\n📝 ").append(bill.getDescription());
+        appendCategoryLine(sb, bill);
+        sb.append("\n💰 ").append(formatCurrency(bill.getInstallmentAmount()));
+        sb.append("\n📅 Pago em ").append(bill.getPaidAt() != null ? bill.getPaidAt().format(DATE_FMT) : "-");
+        return sb.toString();
+    }
+
+    private String buildReceivedMessage(Bill bill) {
+        StringBuilder sb = new StringBuilder("💰 Recebimento confirmado");
+        sb.append("\n📝 ").append(bill.getDescription());
+        appendCategoryLine(sb, bill);
+        sb.append("\n💵 ").append(formatCurrency(bill.getInstallmentAmount()));
+        sb.append("\n📅 Recebido em ").append(bill.getReceivedAt() != null ? bill.getReceivedAt().format(DATE_FMT) : "-");
+        return sb.toString();
+    }
+
+    private String buildRevertedToPendingMessage(Bill bill) {
+        StringBuilder sb = new StringBuilder("↩️ Voltou para pendente");
+        sb.append("\n📝 ").append(bill.getDescription());
+        appendCategoryLine(sb, bill);
+        sb.append("\n💰 ").append(formatCurrency(bill.getInstallmentAmount()));
+        return sb.toString();
+    }
+
+    private String buildEditedMessage(Bill bill, BigDecimal oldAmount, LocalDate oldMaturity,
+                                       boolean amountChanged, boolean maturityChanged) {
+        StringBuilder sb = new StringBuilder("✏️ Lançamento editado");
+        sb.append("\n📝 ").append(bill.getDescription());
+        if (amountChanged) {
+            sb.append("\n💰 ").append(formatCurrency(oldAmount))
+                    .append(" → ").append(formatCurrency(bill.getInstallmentAmount()));
+        }
+        if (maturityChanged) {
+            sb.append("\n📅 Vencimento: ").append(oldMaturity != null ? oldMaturity.format(DATE_FMT) : "-")
+                    .append(" → ").append(bill.getMaturity() != null ? bill.getMaturity().format(DATE_FMT) : "-");
+        }
+        sb.append("\n📌 Status atual: ").append(statusLabel(bill.getStatus()));
+        return sb.toString();
+    }
+
+    private String buildDeletedMessage(Bill bill) {
+        StringBuilder sb = new StringBuilder("🗑️ Lançamento removido");
+        sb.append("\n📝 ").append(bill.getDescription());
+        sb.append("\n💰 ").append(formatCurrency(bill.getInstallmentAmount()));
+        sb.append("\n📌 Estava: ").append(statusLabel(bill.getStatus()));
+        return sb.toString();
     }
 
     private UserAccount getAuthenticatedUser() {
@@ -163,9 +242,7 @@ public class BillService {
 
         for (Bill saved : savedBills) {
             auditLogService.record(currentUser, AuditLogService.CREATE, "Bill", saved.getId(), saved.getDescription());
-            crudNotificationService.notify("🆕 Lançamento criado: " + saved.getDescription()
-                    + " — " + formatCurrency(saved.getInstallmentAmount())
-                    + " — vence " + saved.getMaturity());
+            crudNotificationService.notify(buildCreatedMessage(saved));
         }
 
         return toResponseDTO(savedBills.get(0));
@@ -240,9 +317,9 @@ public class BillService {
                 && (updated.getStatus() == StatusBill.PAID || updated.getStatus() == StatusBill.RECEIVED);
 
         if (becamePaidOrReceived) {
-            String statusEmoji = updated.getStatus() == StatusBill.PAID ? "✅ Pago" : "💰 Recebido";
-            crudNotificationService.notify(statusEmoji + ": " + updated.getDescription()
-                    + " — " + formatCurrency(updated.getInstallmentAmount()));
+            crudNotificationService.notify(updated.getStatus() == StatusBill.PAID
+                    ? buildPaidMessage(updated)
+                    : buildReceivedMessage(updated));
             return;
         }
 
@@ -254,16 +331,7 @@ public class BillService {
             return;
         }
 
-        StringBuilder sb = new StringBuilder("✏️ Editado: " + updated.getDescription());
-        if (amountChanged) {
-            sb.append(" — valor mudou de ").append(formatCurrency(oldAmount))
-                    .append(" pra ").append(formatCurrency(updated.getInstallmentAmount()));
-        }
-        if (maturityChanged) {
-            sb.append(" — vencimento mudou de ").append(oldMaturity)
-                    .append(" pra ").append(updated.getMaturity());
-        }
-        crudNotificationService.notify(sb.toString());
+        crudNotificationService.notify(buildEditedMessage(updated, oldAmount, oldMaturity, amountChanged, maturityChanged));
     }
 
     public DashboardSummaryDTO getConsolidatedSummary() {
@@ -377,13 +445,11 @@ public class BillService {
         auditLogService.record(currentUser, AuditLogService.UPDATE, "Bill", updated.getId(),
                 updated.getDescription() + " -> status " + newStatus);
 
-        String statusEmoji = switch (newStatus) {
-            case PAID -> "✅ Pago";
-            case RECEIVED -> "💰 Recebido";
-            case PENDING -> "↩️ Voltou para pendente";
-        };
-        crudNotificationService.notify(statusEmoji + ": " + updated.getDescription()
-                + " — " + formatCurrency(updated.getInstallmentAmount()));
+        crudNotificationService.notify(switch (newStatus) {
+            case PAID -> buildPaidMessage(updated);
+            case RECEIVED -> buildReceivedMessage(updated);
+            case PENDING -> buildRevertedToPendingMessage(updated);
+        });
 
         return toResponseDTO(updated);
     }
@@ -402,7 +468,6 @@ public class BillService {
         billRepository.delete(bill);
 
         auditLogService.record(currentUser, AuditLogService.DELETE, "Bill", bill.getId(), bill.getDescription());
-        crudNotificationService.notify("🗑️ Lançamento apagado: " + bill.getDescription()
-                + " — " + formatCurrency(bill.getInstallmentAmount()));
+        crudNotificationService.notify(buildDeletedMessage(bill));
     }
 }

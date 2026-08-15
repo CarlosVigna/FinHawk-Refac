@@ -29,7 +29,7 @@ import java.util.Optional;
 @Transactional(readOnly = true)
 public class AgendaEventService {
 
-    private static final DateTimeFormatter DATE_TIME_FMT = DateTimeFormatter.ofPattern("dd/MM 'às' HH:mm");
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
     private static final Map<DayOfWeek, String> DAY_ABBREV = Map.of(
             DayOfWeek.MONDAY, "Seg", DayOfWeek.TUESDAY, "Ter", DayOfWeek.WEDNESDAY, "Qua",
@@ -55,16 +55,61 @@ public class AgendaEventService {
         this.crudNotificationService = crudNotificationService;
     }
 
-    private String describeSchedule(AgendaEvent event) {
-        if (event.getType() == AgendaEventType.ONE_TIME) {
-            return "em " + event.getEventDateTime().format(DATE_TIME_FMT);
+    // ===== Mensagens de notificacao (formato completo, aprovado pelo usuario) =====
+
+    private String habitScheduleFor(RecurrenceFrequency frequency, java.time.LocalTime timeOfDay, List<DayOfWeek> daysOfWeek) {
+        if (timeOfDay == null) {
+            return "-";
         }
-        String time = event.getTimeOfDay().format(TIME_FMT);
-        if (event.getRecurrenceFrequency() == RecurrenceFrequency.WEEKLY) {
-            String days = event.getDaysOfWeek().stream().map(DAY_ABBREV::get).reduce((a, b) -> a + ", " + b).orElse("");
-            return "às " + time + " (" + days + ")";
+        String time = timeOfDay.format(TIME_FMT);
+        if (frequency == RecurrenceFrequency.WEEKLY) {
+            String days = daysOfWeek == null ? "" : daysOfWeek.stream()
+                    .sorted()
+                    .map(DAY_ABBREV::get)
+                    .reduce((a, b) -> a + ", " + b).orElse("");
+            return days + " às " + time;
         }
-        return "todo dia às " + time;
+        return "Todo dia às " + time;
+    }
+
+    private String habitSchedule(AgendaEvent habit) {
+        return habitScheduleFor(habit.getRecurrenceFrequency(), habit.getTimeOfDay(), habit.getDaysOfWeek());
+    }
+
+    private String buildEventCreatedMessage(AgendaEvent event) {
+        StringBuilder sb = new StringBuilder("🆕 Novo evento na agenda");
+        sb.append("\n📌 ").append(event.getTitle());
+        if (event.getDescription() != null && !event.getDescription().isBlank()) {
+            sb.append("\n📝 ").append(event.getDescription());
+        }
+        sb.append("\n📅 ").append(event.getEventDateTime().format(DATE_FMT))
+                .append(" às ").append(event.getEventDateTime().format(TIME_FMT));
+        return sb.toString();
+    }
+
+    private String buildHabitCreatedMessage(AgendaEvent habit) {
+        return "🆕 Novo hábito\n🔁 " + habit.getTitle() + "\n⏰ " + habitSchedule(habit);
+    }
+
+    private String buildEventUpdatedMessage(AgendaEvent updated, LocalDateTime oldEventDateTime) {
+        StringBuilder sb = new StringBuilder("✏️ Evento atualizado");
+        sb.append("\n📌 ").append(updated.getTitle());
+        sb.append("\n📅 ");
+        if (oldEventDateTime != null) {
+            sb.append(oldEventDateTime.format(DATE_FMT)).append(" às ").append(oldEventDateTime.format(TIME_FMT));
+        } else {
+            sb.append("-");
+        }
+        sb.append(" → ").append(updated.getEventDateTime().format(DATE_FMT))
+                .append(" às ").append(updated.getEventDateTime().format(TIME_FMT));
+        return sb.toString();
+    }
+
+    private String buildHabitUpdatedMessage(AgendaEvent updated, RecurrenceFrequency oldFrequency,
+                                             java.time.LocalTime oldTimeOfDay, List<DayOfWeek> oldDaysOfWeek) {
+        String oldSchedule = habitScheduleFor(oldFrequency, oldTimeOfDay, oldDaysOfWeek);
+        String newSchedule = habitSchedule(updated);
+        return "✏️ Hábito atualizado\n🔁 " + updated.getTitle() + "\n⏰ " + oldSchedule + " → " + newSchedule;
     }
 
     private UserAccount getAuthenticatedUser() {
@@ -166,8 +211,9 @@ public class AgendaEventService {
         AgendaEvent saved = agendaEventRepository.save(event);
 
         auditLogService.record(currentUser, AuditLogService.CREATE, "AgendaEvent", saved.getId(), saved.getTitle());
-        String kind = saved.getType() == AgendaEventType.ONE_TIME ? "Evento" : "Hábito";
-        crudNotificationService.notify("🆕 " + kind + " criado: " + saved.getTitle() + " " + describeSchedule(saved));
+        crudNotificationService.notify(saved.getType() == AgendaEventType.ONE_TIME
+                ? buildEventCreatedMessage(saved)
+                : buildHabitCreatedMessage(saved));
 
         return toResponseDTO(saved);
     }
@@ -193,7 +239,6 @@ public class AgendaEventService {
 
         AgendaEvent event = findOwned(id, currentUser);
         boolean wasActive = event.getActive();
-        String oldTitle = event.getTitle();
         LocalDateTime oldEventDateTime = event.getEventDateTime();
         RecurrenceFrequency oldRecurrenceFrequency = event.getRecurrenceFrequency();
         java.time.LocalTime oldTimeOfDay = event.getTimeOfDay();
@@ -251,23 +296,26 @@ public class AgendaEventService {
         auditLogService.record(currentUser, AuditLogService.UPDATE, "AgendaEvent", updated.getId(), updated.getTitle());
 
         // Prioridade: 1) active mudou -> so pausar/reativar (nunca junto com
-        // "editado", seria redundante); 2) titulo/horario/agendamento mudou
-        // -> editado; 3) so a descricao mudou (ou nada mudou de fato) -> nao
-        // notifica, nada relevante pro grupo saber.
+        // "editado", seria redundante); 2) agendamento mudou (data/hora do
+        // evento, ou frequencia/horario/dias do habito) -> editado; 3) so
+        // titulo/descricao mudaram (ou nada mudou de fato) -> nao notifica,
+        // nada relevante pro grupo saber.
         if (wasActive != updated.getActive()) {
             crudNotificationService.notify(updated.getActive()
-                    ? "▶️ Hábito reativado: " + updated.getTitle()
-                    : "⏸️ Hábito pausado: " + updated.getTitle());
+                    ? "▶️ Hábito reativado\n🔁 " + updated.getTitle()
+                    : "⏸️ Hábito pausado\n🔁 " + updated.getTitle());
+        } else if (updated.getType() == AgendaEventType.ONE_TIME) {
+            boolean dateTimeChanged = !java.util.Objects.equals(oldEventDateTime, updated.getEventDateTime());
+            if (dateTimeChanged) {
+                crudNotificationService.notify(buildEventUpdatedMessage(updated, oldEventDateTime));
+            }
         } else {
-            boolean scheduleChanged = !java.util.Objects.equals(oldTitle, updated.getTitle())
-                    || !java.util.Objects.equals(oldEventDateTime, updated.getEventDateTime())
-                    || !java.util.Objects.equals(oldRecurrenceFrequency, updated.getRecurrenceFrequency())
+            boolean scheduleChanged = !java.util.Objects.equals(oldRecurrenceFrequency, updated.getRecurrenceFrequency())
                     || !java.util.Objects.equals(oldTimeOfDay, updated.getTimeOfDay())
                     || !java.util.Objects.equals(oldDaysOfWeek, updated.getDaysOfWeek());
 
             if (scheduleChanged) {
-                String kind = updated.getType() == AgendaEventType.ONE_TIME ? "Evento" : "Hábito";
-                crudNotificationService.notify("✏️ " + kind + " atualizado: " + updated.getTitle() + " " + describeSchedule(updated));
+                crudNotificationService.notify(buildHabitUpdatedMessage(updated, oldRecurrenceFrequency, oldTimeOfDay, oldDaysOfWeek));
             }
         }
 
@@ -301,8 +349,9 @@ public class AgendaEventService {
         agendaEventRepository.save(event);
 
         auditLogService.record(currentUser, AuditLogService.DELETE, "AgendaEvent", event.getId(), event.getTitle());
-        String kind = event.getType() == AgendaEventType.ONE_TIME ? "Evento" : "Hábito";
-        crudNotificationService.notify("🗑️ " + kind + " apagado: " + event.getTitle());
+        crudNotificationService.notify(event.getType() == AgendaEventType.ONE_TIME
+                ? "🗑️ Evento removido\n📌 " + event.getTitle()
+                : "🗑️ Hábito removido\n🔁 " + event.getTitle());
     }
 
     // ===== Conclusão diária (hábitos) =====
