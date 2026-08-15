@@ -167,13 +167,6 @@ public class UserAccountService {
 
     @Transactional
     public void importUserData(UserDataImportDTO dto) {
-        // Import em massa (backup/restauracao, historico de extrato) -- roda
-        // inteiro em modo silencioso pra nao disparar notificacao de WhatsApp
-        // por item. Ver BulkOperationContext.
-        BulkOperationContext.runSilently(() -> doImportUserData(dto));
-    }
-
-    private void doImportUserData(UserDataImportDTO dto) {
         if (!"1.0".equals(dto.version())) {
             throw new RuntimeException("Backup version invalid. Expected: 1.0");
         }

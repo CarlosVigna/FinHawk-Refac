@@ -11,7 +11,6 @@ import com.carlos.finhawk_refac.enums.StatusBill;
 import com.carlos.finhawk_refac.repository.AccountRepository;
 import com.carlos.finhawk_refac.repository.BillRepository;
 import com.carlos.finhawk_refac.repository.CategoryRepository;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -21,11 +20,9 @@ import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 import com.carlos.finhawk_refac.dto.response.DashboardSummaryDTO;
 import com.carlos.finhawk_refac.dto.response.AccountSummaryDTO;
 
@@ -33,105 +30,29 @@ import com.carlos.finhawk_refac.dto.response.AccountSummaryDTO;
 @Transactional(readOnly = true)
 public class BillService {
 
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-
     private final BillRepository billRepository;
     private final CategoryRepository categoryRepository;
     private final AccountRepository accountRepository;
     private final AuditLogService auditLogService;
-    private final WhatsAppNotificationService whatsAppNotificationService;
-
-    @Value("${whatsapp.large-amount-threshold:1000}")
-    private BigDecimal largeAmountThreshold;
+    private final CrudNotificationService crudNotificationService;
 
     public BillService(
             BillRepository billRepository,
             CategoryRepository categoryRepository,
             AccountRepository accountRepository,
             AuditLogService auditLogService,
-            WhatsAppNotificationService whatsAppNotificationService
+            CrudNotificationService crudNotificationService
     ) {
         this.billRepository = billRepository;
         this.categoryRepository = categoryRepository;
         this.accountRepository = accountRepository;
         this.auditLogService = auditLogService;
-        this.whatsAppNotificationService = whatsAppNotificationService;
+        this.crudNotificationService = crudNotificationService;
     }
 
     private static String formatCurrency(BigDecimal value) {
         NumberFormat fmt = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
         return fmt.format(value != null ? value : BigDecimal.ZERO);
-    }
-
-    // Notificacoes de ciclo de vida de Bill (criado/pago/editado/excluido) --
-    // nunca disparam durante operacoes em lote (ver BulkOperationContext).
-
-    private void notifyCreated(Bill bill) {
-        if (BulkOperationContext.isActive()) {
-            return;
-        }
-        whatsAppNotificationService.sendMessage(
-                "🆕 Novo lançamento: " + bill.getDescription()
-                        + " — " + formatCurrency(bill.getInstallmentAmount())
-                        + " (vence " + bill.getMaturity().format(DATE_FMT) + ").");
-
-        if (bill.getInstallmentAmount() != null
-                && largeAmountThreshold != null
-                && bill.getInstallmentAmount().compareTo(largeAmountThreshold) > 0) {
-            whatsAppNotificationService.sendMessage(
-                    "⚠️ Lançamento de valor alto: " + bill.getDescription()
-                            + " — " + formatCurrency(bill.getInstallmentAmount()));
-        }
-    }
-
-    private void notifyStatusChanged(Bill bill, StatusBill oldStatus) {
-        if (BulkOperationContext.isActive()) {
-            return;
-        }
-        if (bill.getStatus() == oldStatus) {
-            return;
-        }
-        if (bill.getStatus() == StatusBill.PAID) {
-            whatsAppNotificationService.sendMessage(
-                    "✅ Pago: " + bill.getDescription() + " — " + formatCurrency(bill.getInstallmentAmount()));
-        } else if (bill.getStatus() == StatusBill.RECEIVED) {
-            whatsAppNotificationService.sendMessage(
-                    "✅ Recebido: " + bill.getDescription() + " — " + formatCurrency(bill.getInstallmentAmount()));
-        }
-    }
-
-    private void notifyEdited(Bill bill, BigDecimal oldAmount, LocalDate oldMaturity) {
-        if (BulkOperationContext.isActive()) {
-            return;
-        }
-        boolean amountChanged = !Objects.equals(oldAmount, bill.getInstallmentAmount())
-                && (oldAmount == null || bill.getInstallmentAmount() == null
-                        || oldAmount.compareTo(bill.getInstallmentAmount()) != 0);
-        boolean maturityChanged = !Objects.equals(oldMaturity, bill.getMaturity());
-
-        if (!amountChanged && !maturityChanged) {
-            return;
-        }
-
-        StringBuilder sb = new StringBuilder("✏️ Editado: ").append(bill.getDescription());
-        if (amountChanged) {
-            sb.append(" — valor mudou de ").append(formatCurrency(oldAmount))
-                    .append(" pra ").append(formatCurrency(bill.getInstallmentAmount()));
-        }
-        if (maturityChanged) {
-            sb.append(amountChanged ? "; " : " — ")
-                    .append("vencimento mudou de ").append(oldMaturity != null ? oldMaturity.format(DATE_FMT) : "-")
-                    .append(" pra ").append(bill.getMaturity() != null ? bill.getMaturity().format(DATE_FMT) : "-");
-        }
-        whatsAppNotificationService.sendMessage(sb.toString());
-    }
-
-    private void notifyDeleted(Bill bill) {
-        if (BulkOperationContext.isActive()) {
-            return;
-        }
-        whatsAppNotificationService.sendMessage(
-                "🗑️ Excluído: " + bill.getDescription() + " — " + formatCurrency(bill.getInstallmentAmount()));
     }
 
     private UserAccount getAuthenticatedUser() {
@@ -242,12 +163,10 @@ public class BillService {
 
         for (Bill saved : savedBills) {
             auditLogService.record(currentUser, AuditLogService.CREATE, "Bill", saved.getId(), saved.getDescription());
+            crudNotificationService.notify("🆕 Lançamento criado: " + saved.getDescription()
+                    + " — " + formatCurrency(saved.getInstallmentAmount())
+                    + " — vence " + saved.getMaturity());
         }
-
-        // Uma unica notificacao por chamada a create(), mesmo quando gera
-        // varias parcelas de uma vez -- evita enxurrada de mensagens pra
-        // compras parceladas sem deixar de avisar da criacao.
-        notifyCreated(savedBills.get(0));
 
         return toResponseDTO(savedBills.get(0));
     }
@@ -307,11 +226,44 @@ public class BillService {
         Bill updated = billRepository.save(bill);
 
         auditLogService.record(currentUser, AuditLogService.UPDATE, "Bill", updated.getId(), updated.getDescription());
-
-        notifyStatusChanged(updated, oldStatus);
-        notifyEdited(updated, oldAmount, oldMaturity);
+        notifyUpdate(updated, oldStatus, oldAmount, oldMaturity);
 
         return toResponseDTO(updated);
+    }
+
+    // Prioridade: 1) status virou PAID/RECEIVED -> so a mensagem de pago/recebido
+    // (editado seria redundante); 2) valor ou vencimento mudou -> editado, com
+    // antes/depois; 3) so campos "cosmeticos" (descricao/categoria/etc) mudaram
+    // -> nao notifica, nao ha nada relevante pro grupo saber.
+    private void notifyUpdate(Bill updated, StatusBill oldStatus, BigDecimal oldAmount, LocalDate oldMaturity) {
+        boolean becamePaidOrReceived = oldStatus != updated.getStatus()
+                && (updated.getStatus() == StatusBill.PAID || updated.getStatus() == StatusBill.RECEIVED);
+
+        if (becamePaidOrReceived) {
+            String statusEmoji = updated.getStatus() == StatusBill.PAID ? "✅ Pago" : "💰 Recebido";
+            crudNotificationService.notify(statusEmoji + ": " + updated.getDescription()
+                    + " — " + formatCurrency(updated.getInstallmentAmount()));
+            return;
+        }
+
+        boolean amountChanged = oldAmount == null ? updated.getInstallmentAmount() != null
+                : oldAmount.compareTo(updated.getInstallmentAmount()) != 0;
+        boolean maturityChanged = !oldMaturity.equals(updated.getMaturity());
+
+        if (!amountChanged && !maturityChanged) {
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder("✏️ Editado: " + updated.getDescription());
+        if (amountChanged) {
+            sb.append(" — valor mudou de ").append(formatCurrency(oldAmount))
+                    .append(" pra ").append(formatCurrency(updated.getInstallmentAmount()));
+        }
+        if (maturityChanged) {
+            sb.append(" — vencimento mudou de ").append(oldMaturity)
+                    .append(" pra ").append(updated.getMaturity());
+        }
+        crudNotificationService.notify(sb.toString());
     }
 
     public DashboardSummaryDTO getConsolidatedSummary() {
@@ -411,8 +363,6 @@ public class BillService {
             throw new RuntimeException("You are not allowed to update this bill");
         }
 
-        StatusBill oldStatus = bill.getStatus();
-
         if (newStatus == StatusBill.PAID && bill.getPaidAt() == null) {
             bill.setPaidAt(LocalDateTime.now());
         }
@@ -427,7 +377,13 @@ public class BillService {
         auditLogService.record(currentUser, AuditLogService.UPDATE, "Bill", updated.getId(),
                 updated.getDescription() + " -> status " + newStatus);
 
-        notifyStatusChanged(updated, oldStatus);
+        String statusEmoji = switch (newStatus) {
+            case PAID -> "✅ Pago";
+            case RECEIVED -> "💰 Recebido";
+            case PENDING -> "↩️ Voltou para pendente";
+        };
+        crudNotificationService.notify(statusEmoji + ": " + updated.getDescription()
+                + " — " + formatCurrency(updated.getInstallmentAmount()));
 
         return toResponseDTO(updated);
     }
@@ -446,7 +402,7 @@ public class BillService {
         billRepository.delete(bill);
 
         auditLogService.record(currentUser, AuditLogService.DELETE, "Bill", bill.getId(), bill.getDescription());
-
-        notifyDeleted(bill);
+        crudNotificationService.notify("🗑️ Lançamento apagado: " + bill.getDescription()
+                + " — " + formatCurrency(bill.getInstallmentAmount()));
     }
 }
