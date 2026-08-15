@@ -8,6 +8,7 @@ import com.carlos.finhawk_refac.entity.Account;
 import com.carlos.finhawk_refac.entity.AgendaEvent;
 import com.carlos.finhawk_refac.entity.AgendaEventCompletion;
 import com.carlos.finhawk_refac.entity.UserAccount;
+import com.carlos.finhawk_refac.enums.AgendaCompletionStatus;
 import com.carlos.finhawk_refac.enums.AgendaEventType;
 import com.carlos.finhawk_refac.enums.RecurrenceFrequency;
 import com.carlos.finhawk_refac.repository.AccountRepository;
@@ -373,20 +374,34 @@ public class AgendaEventService {
         Optional<AgendaEventCompletion> existing = agendaEventCompletionRepository
                 .findByAgendaEvent_IdAndEventDate(eventId, dto.eventDate());
 
+        AgendaEventCompletion saved;
+        boolean created;
+
         if (existing.isPresent()) {
             AgendaEventCompletion completion = existing.get();
             completion.setStatus(dto.status());
             completion.setCompletedAt(LocalDateTime.now());
-            return new MarkCompletionResult(toCompletionResponseDTO(agendaEventCompletionRepository.save(completion)), false);
+            saved = agendaEventCompletionRepository.save(completion);
+            created = false;
+        } else {
+            AgendaEventCompletion completion = new AgendaEventCompletion();
+            completion.setAgendaEvent(event);
+            completion.setEventDate(dto.eventDate());
+            completion.setStatus(dto.status());
+            completion.setCompletedAt(LocalDateTime.now());
+            saved = agendaEventCompletionRepository.save(completion);
+            created = true;
         }
 
-        AgendaEventCompletion completion = new AgendaEventCompletion();
-        completion.setAgendaEvent(event);
-        completion.setEventDate(dto.eventDate());
-        completion.setStatus(dto.status());
-        completion.setCompletedAt(LocalDateTime.now());
+        // "Pulado" nao notifica de proposito -- feito e o que vale comemorar,
+        // pulado so geraria ruido no grupo.
+        if (dto.status() == AgendaCompletionStatus.DONE) {
+            crudNotificationService.notify(event.getType() == AgendaEventType.ONE_TIME
+                    ? "✅ Feito!\n📌 " + event.getTitle()
+                    : "✅ Feito hoje!\n🔁 " + event.getTitle());
+        }
 
-        return new MarkCompletionResult(toCompletionResponseDTO(agendaEventCompletionRepository.save(completion)), true);
+        return new MarkCompletionResult(toCompletionResponseDTO(saved), created);
     }
 
     @Transactional
