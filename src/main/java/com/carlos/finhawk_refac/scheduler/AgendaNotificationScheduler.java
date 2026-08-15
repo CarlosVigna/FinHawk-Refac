@@ -95,6 +95,36 @@ public class AgendaNotificationScheduler {
         return false;
     }
 
+    // Eventos pontuais ativos programados pra uma data especifica -- usado
+    // pelo resumo noturno (amanha) e pelo resumo sob demanda de hoje.
+    private List<AgendaEvent> oneTimeEventsOn(LocalDate date) {
+        return agendaEventRepository
+                .findAllByTypeAndActiveTrueAndDeletedAtIsNullAndEventDateTimeBetween(
+                        AgendaEventType.ONE_TIME, date.atStartOfDay(), date.plusDays(1).atStartOfDay());
+    }
+
+    // Habitos ativos que ocorrem numa data especifica -- mesmo uso do metodo acima.
+    private List<AgendaEvent> habitsOn(LocalDate date) {
+        return agendaEventRepository.findAllByTypeAndActiveTrueAndDeletedAtIsNull(AgendaEventType.HABIT)
+                .stream()
+                .filter(h -> habitOccursOn(h, date))
+                .toList();
+    }
+
+    // Linhas de evento/habito ("📅 titulo as HH:mm" / "🔁 titulo as HH:mm"),
+    // reaproveitadas pelo resumo noturno e pelo resumo sob demanda de hoje.
+    private void appendEventAndHabitLines(StringBuilder sb, List<AgendaEvent> oneTimeEvents, List<AgendaEvent> habits) {
+        oneTimeEvents.stream()
+                .sorted((a, b) -> a.getEventDateTime().compareTo(b.getEventDateTime()))
+                .forEach(e -> sb.append("\n📅 ").append(e.getTitle())
+                        .append(" às ").append(e.getEventDateTime().format(TIME_FMT)));
+
+        habits.stream()
+                .sorted((a, b) -> a.getTimeOfDay().compareTo(b.getTimeOfDay()))
+                .forEach(h -> sb.append("\n🔁 ").append(h.getTitle())
+                        .append(" às ").append(h.getTimeOfDay().format(TIME_FMT)));
+    }
+
     // ===== Resumo noturno diario (21h): agenda de amanha + vencimentos de amanha =====
 
     @Scheduled(cron = "0 0 21 * * *", zone = "America/Sao_Paulo")
@@ -108,30 +138,14 @@ public class AgendaNotificationScheduler {
                 return;
             }
 
-            List<AgendaEvent> oneTimeTomorrow = agendaEventRepository
-                    .findAllByTypeAndActiveTrueAndDeletedAtIsNullAndEventDateTimeBetween(
-                            AgendaEventType.ONE_TIME, tomorrow.atStartOfDay(), tomorrow.plusDays(1).atStartOfDay());
-
-            List<AgendaEvent> habitsTomorrow = agendaEventRepository
-                    .findAllByTypeAndActiveTrueAndDeletedAtIsNull(AgendaEventType.HABIT)
-                    .stream()
-                    .filter(h -> habitOccursOn(h, tomorrow))
-                    .toList();
-
+            List<AgendaEvent> oneTimeTomorrow = oneTimeEventsOn(tomorrow);
+            List<AgendaEvent> habitsTomorrow = habitsOn(tomorrow);
             List<Bill> billsTomorrow = billRepository.findAllByMaturityAndStatus(tomorrow, StatusBill.PENDING);
 
             if (!oneTimeTomorrow.isEmpty() || !habitsTomorrow.isEmpty() || !billsTomorrow.isEmpty()) {
                 StringBuilder sb = new StringBuilder("📋 Resumo de amanhã (" + tomorrow.format(DATE_FMT) + "):\n");
 
-                oneTimeTomorrow.stream()
-                        .sorted((a, b) -> a.getEventDateTime().compareTo(b.getEventDateTime()))
-                        .forEach(e -> sb.append("\n📅 ").append(e.getTitle())
-                                .append(" às ").append(e.getEventDateTime().format(TIME_FMT)));
-
-                habitsTomorrow.stream()
-                        .sorted((a, b) -> a.getTimeOfDay().compareTo(b.getTimeOfDay()))
-                        .forEach(h -> sb.append("\n🔁 ").append(h.getTitle())
-                                .append(" às ").append(h.getTimeOfDay().format(TIME_FMT)));
+                appendEventAndHabitLines(sb, oneTimeTomorrow, habitsTomorrow);
 
                 billsTomorrow.forEach(b -> sb.append("\n💰 Vence amanhã: ").append(b.getDescription())
                         .append(" — ").append(formatCurrency(b.getInstallmentAmount())));
@@ -384,6 +398,78 @@ public class AgendaNotificationScheduler {
         }
 
         return earliestMissed == null ? null : (int) ChronoUnit.DAYS.between(earliestMissed, today);
+    }
+
+    // ===== Resumos sob demanda (POST /agenda/notify/*): reaproveitam a mesma
+    // logica de consulta/montagem dos jobs automaticos acima, mas disparam na
+    // hora (sem esperar cron nem checar NotificationLog) e SEMPRE mandam uma
+    // mensagem -- mesmo vazia -- porque foram um pedido explicito do usuario;
+    // ao contrario dos jobs automaticos, ficar em silencio pareceria que nao
+    // fez nada. Retornam a quantidade de itens incluidos na mensagem.
+
+    public int notifyToday() {
+        LocalDate today = LocalDate.now(ZONE);
+
+        List<AgendaEvent> oneTimeToday = oneTimeEventsOn(today);
+        List<AgendaEvent> habitsToday = habitsOn(today);
+        List<Bill> billsToday = billRepository.findAllByMaturityAndStatus(today, StatusBill.PENDING);
+
+        int itemCount = oneTimeToday.size() + habitsToday.size() + billsToday.size();
+
+        if (itemCount == 0) {
+            whatsAppNotificationService.sendMessage("📆 Hoje: nada agendado e nenhuma conta vencendo. 🎉");
+            return 0;
+        }
+
+        StringBuilder sb = new StringBuilder("📆 Hoje:\n");
+        appendEventAndHabitLines(sb, oneTimeToday, habitsToday);
+        billsToday.forEach(b -> sb.append("\n💰 ").append(b.getDescription())
+                .append(" — ").append(formatCurrency(b.getInstallmentAmount())));
+
+        whatsAppNotificationService.sendMessage(sb.toString());
+        return itemCount;
+    }
+
+    public int notifyWeek() {
+        LocalDate today = LocalDate.now(ZONE);
+        LocalDate start = today.plusDays(1);
+        LocalDate end = today.plusDays(7);
+
+        List<Bill> bills = billRepository.findAllByMaturityBetweenAndStatus(start, end, StatusBill.PENDING);
+
+        if (bills.isEmpty()) {
+            whatsAppNotificationService.sendMessage("📅 Próximos 7 dias: nenhuma conta vencendo. 🎉");
+            return 0;
+        }
+
+        StringBuilder sb = new StringBuilder("📅 Próximos 7 dias:\n");
+        bills.stream()
+                .sorted((a, b) -> a.getMaturity().compareTo(b.getMaturity()))
+                .forEach(b -> sb.append("\n💰 ").append(b.getMaturity().format(DATE_FMT))
+                        .append(" — ").append(b.getDescription())
+                        .append(" — ").append(formatCurrency(b.getInstallmentAmount())));
+
+        whatsAppNotificationService.sendMessage(sb.toString());
+        return bills.size();
+    }
+
+    public int notifyOpenBills() {
+        List<Bill> bills = billRepository.findAllByStatus(StatusBill.PENDING);
+
+        if (bills.isEmpty()) {
+            whatsAppNotificationService.sendMessage("💰 Tudo em aberto: nenhuma conta pendente. 🎉");
+            return 0;
+        }
+
+        StringBuilder sb = new StringBuilder("💰 Tudo em aberto:\n");
+        bills.stream()
+                .sorted((a, b) -> a.getMaturity().compareTo(b.getMaturity()))
+                .forEach(b -> sb.append("\n💰 ").append(b.getMaturity().format(DATE_FMT_FULL))
+                        .append(" — ").append(b.getDescription())
+                        .append(" — ").append(formatCurrency(b.getInstallmentAmount())));
+
+        whatsAppNotificationService.sendMessage(sb.toString());
+        return bills.size();
     }
 
     private void markSent(String jobKey, LocalDate referenceDate) {
