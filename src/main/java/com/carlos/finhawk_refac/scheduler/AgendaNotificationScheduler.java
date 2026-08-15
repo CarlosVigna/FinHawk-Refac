@@ -11,6 +11,7 @@ import com.carlos.finhawk_refac.repository.AgendaEventCompletionRepository;
 import com.carlos.finhawk_refac.repository.AgendaEventRepository;
 import com.carlos.finhawk_refac.repository.BillRepository;
 import com.carlos.finhawk_refac.repository.NotificationLogRepository;
+import com.carlos.finhawk_refac.service.NotificationMessageBuilder;
 import com.carlos.finhawk_refac.service.WhatsAppNotificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +26,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -421,12 +423,18 @@ public class AgendaNotificationScheduler {
             return 0;
         }
 
-        StringBuilder sb = new StringBuilder("📆 Hoje:\n");
-        appendEventAndHabitLines(sb, oneTimeToday, habitsToday);
-        billsToday.forEach(b -> sb.append("\n💰 ").append(b.getDescription())
-                .append(" — ").append(formatCurrency(b.getInstallmentAmount())));
+        List<String> blocks = new ArrayList<>();
+        oneTimeToday.stream()
+                .sorted((a, b) -> a.getEventDateTime().compareTo(b.getEventDateTime()))
+                .forEach(e -> blocks.add(NotificationMessageBuilder.eventBlock(e)));
+        habitsToday.stream()
+                .sorted((a, b) -> a.getTimeOfDay().compareTo(b.getTimeOfDay()))
+                .forEach(h -> blocks.add(NotificationMessageBuilder.habitBlock(h)));
+        billsToday.stream()
+                .sorted((a, b) -> a.getMaturity().compareTo(b.getMaturity()))
+                .forEach(b -> blocks.add(NotificationMessageBuilder.billBlock(b)));
 
-        whatsAppNotificationService.sendMessage(sb.toString());
+        whatsAppNotificationService.sendMessage("📆 Hoje:\n\n" + String.join("\n\n", blocks));
         return itemCount;
     }
 
@@ -442,14 +450,12 @@ public class AgendaNotificationScheduler {
             return 0;
         }
 
-        StringBuilder sb = new StringBuilder("📅 Próximos 7 dias:\n");
-        bills.stream()
+        List<String> blocks = bills.stream()
                 .sorted((a, b) -> a.getMaturity().compareTo(b.getMaturity()))
-                .forEach(b -> sb.append("\n💰 ").append(b.getMaturity().format(DATE_FMT))
-                        .append(" — ").append(b.getDescription())
-                        .append(" — ").append(formatCurrency(b.getInstallmentAmount())));
+                .map(NotificationMessageBuilder::billBlock)
+                .toList();
 
-        whatsAppNotificationService.sendMessage(sb.toString());
+        whatsAppNotificationService.sendMessage("📅 Próximos 7 dias:\n\n" + String.join("\n\n", blocks));
         return bills.size();
     }
 
@@ -461,14 +467,12 @@ public class AgendaNotificationScheduler {
             return 0;
         }
 
-        StringBuilder sb = new StringBuilder("💰 Tudo em aberto:\n");
-        bills.stream()
+        List<String> blocks = bills.stream()
                 .sorted((a, b) -> a.getMaturity().compareTo(b.getMaturity()))
-                .forEach(b -> sb.append("\n💰 ").append(b.getMaturity().format(DATE_FMT_FULL))
-                        .append(" — ").append(b.getDescription())
-                        .append(" — ").append(formatCurrency(b.getInstallmentAmount())));
+                .map(NotificationMessageBuilder::billBlock)
+                .toList();
 
-        whatsAppNotificationService.sendMessage(sb.toString());
+        whatsAppNotificationService.sendMessage("💰 Tudo em aberto:\n\n" + String.join("\n\n", blocks));
         return bills.size();
     }
 
