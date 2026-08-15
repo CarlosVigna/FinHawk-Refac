@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
@@ -29,6 +30,10 @@ import java.util.Optional;
 @Transactional(readOnly = true)
 public class AgendaEventService {
 
+    // Mesmo fuso usado pelos schedulers (AgendaNotificationScheduler) --
+    // LocalDateTime.now() sem argumento usa o relogio/fuso do servidor, que
+    // em producao roda em UTC, nao America/Sao_Paulo.
+    private static final ZoneId ZONE = ZoneId.of("America/Sao_Paulo");
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
 
     private final AgendaEventRepository agendaEventRepository;
@@ -360,6 +365,13 @@ public class AgendaEventService {
         UserAccount currentUser = getAuthenticatedUser();
         AgendaEvent event = findOwned(eventId, currentUser);
 
+        // LocalDateTime.now() sem fuso pega a hora do relogio do servidor
+        // (UTC em producao) -- capturamos uma unica vez aqui, ja em
+        // America/Sao_Paulo, e reaproveitamos tanto pro completedAt
+        // persistido quanto pro "Concluido as" da notificacao, pra nao
+        // correr o risco de duas leituras do relogio divergirem.
+        LocalDateTime now = LocalDateTime.now(ZONE);
+
         Optional<AgendaEventCompletion> existing = agendaEventCompletionRepository
                 .findByAgendaEvent_IdAndEventDate(eventId, dto.eventDate());
 
@@ -369,7 +381,7 @@ public class AgendaEventService {
         if (existing.isPresent()) {
             AgendaEventCompletion completion = existing.get();
             completion.setStatus(dto.status());
-            completion.setCompletedAt(LocalDateTime.now());
+            completion.setCompletedAt(now);
             saved = agendaEventCompletionRepository.save(completion);
             created = false;
         } else {
@@ -377,7 +389,7 @@ public class AgendaEventService {
             completion.setAgendaEvent(event);
             completion.setEventDate(dto.eventDate());
             completion.setStatus(dto.status());
-            completion.setCompletedAt(LocalDateTime.now());
+            completion.setCompletedAt(now);
             saved = agendaEventCompletionRepository.save(completion);
             created = true;
         }
@@ -390,7 +402,7 @@ public class AgendaEventService {
             if (event.getDescription() != null && !event.getDescription().isBlank()) {
                 sb.append("\n📝 ").append(event.getDescription());
             }
-            sb.append("\n🕒 Concluído às ").append(LocalDateTime.now().format(TIME_FMT));
+            sb.append("\n🕒 Concluído às ").append(now.format(TIME_FMT));
             crudNotificationService.notify(sb.toString());
         }
 

@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import com.carlos.finhawk_refac.dto.response.DashboardSummaryDTO;
@@ -27,6 +28,12 @@ import com.carlos.finhawk_refac.dto.response.AccountSummaryDTO;
 @Service
 @Transactional(readOnly = true)
 public class BillService {
+
+    // Mesmo fuso usado pelos schedulers e por AgendaEventService --
+    // LocalDateTime.now() sem argumento usa o relogio/fuso do servidor
+    // (UTC em producao), o que pode mostrar a data errada em paidAt/
+    // receivedAt (exibidos como data nas notificacoes) perto da meia-noite.
+    private static final ZoneId ZONE = ZoneId.of("America/Sao_Paulo");
 
     private final BillRepository billRepository;
     private final CategoryRepository categoryRepository;
@@ -185,9 +192,9 @@ public class BillService {
                 StatusBill initialStatus = dto.status() != null ? dto.status() : StatusBill.PENDING;
                 bill.setStatus(initialStatus);
                 if (initialStatus == StatusBill.PAID) {
-                    bill.setPaidAt(LocalDateTime.now());
+                    bill.setPaidAt(LocalDateTime.now(ZONE));
                 } else if (initialStatus == StatusBill.RECEIVED) {
-                    bill.setReceivedAt(LocalDateTime.now());
+                    bill.setReceivedAt(LocalDateTime.now(ZONE));
                 }
             } else {
                 bill.setStatus(StatusBill.PENDING);
@@ -242,10 +249,10 @@ public class BillService {
             StatusBill newStatus = dto.status();
             // if transitioning to PAID/RECEIVED set timestamps if not present
             if (newStatus == StatusBill.PAID && bill.getPaidAt() == null) {
-                bill.setPaidAt(LocalDateTime.now());
+                bill.setPaidAt(LocalDateTime.now(ZONE));
             }
             if (newStatus == StatusBill.RECEIVED && bill.getReceivedAt() == null) {
-                bill.setReceivedAt(LocalDateTime.now());
+                bill.setReceivedAt(LocalDateTime.now(ZONE));
             }
             bill.setStatus(newStatus);
         }
@@ -390,10 +397,10 @@ public class BillService {
         }
 
         if (newStatus == StatusBill.PAID && bill.getPaidAt() == null) {
-            bill.setPaidAt(LocalDateTime.now());
+            bill.setPaidAt(LocalDateTime.now(ZONE));
         }
         if (newStatus == StatusBill.RECEIVED && bill.getReceivedAt() == null) {
-            bill.setReceivedAt(LocalDateTime.now());
+            bill.setReceivedAt(LocalDateTime.now(ZONE));
         }
 
         bill.setStatus(newStatus);
