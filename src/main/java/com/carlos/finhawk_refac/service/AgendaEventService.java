@@ -422,6 +422,12 @@ public class AgendaEventService {
             AgendaEventCompletion completion = existing.get();
             completion.setStatus(dto.status());
             completion.setCompletedAt(now);
+            // Reabre pro proximo resumo consolidado (habitCompletionDigest) se
+            // essa conclusao esta sendo re-marcada como DONE (ex: usuario
+            // desmarcou e marcou nova conta -- conta como novidade de novo).
+            if (dto.status() == AgendaCompletionStatus.DONE) {
+                completion.setNotifiedAt(null);
+            }
             saved = agendaEventCompletionRepository.save(completion);
             created = false;
         } else {
@@ -435,10 +441,14 @@ public class AgendaEventService {
         }
 
         // "Pulado" nao notifica de proposito -- feito e o que vale comemorar,
-        // pulado so geraria ruido no grupo.
-        if (dto.status() == AgendaCompletionStatus.DONE) {
+        // pulado so geraria ruido no grupo. Evento pontual notifica na hora;
+        // habito concluido vira resumo consolidado 4x/dia
+        // (AgendaNotificationScheduler.habitCompletionDigest), nao mais
+        // instantaneo -- so fica registrado aqui (notifiedAt continua nulo
+        // ate o proximo disparo do resumo).
+        if (dto.status() == AgendaCompletionStatus.DONE && event.getType() == AgendaEventType.ONE_TIME) {
             StringBuilder sb = new StringBuilder("✅ Feito!");
-            sb.append("\n").append(event.getType() == AgendaEventType.ONE_TIME ? "📌 " : "🔁 ").append(event.getTitle());
+            sb.append("\n📌 ").append(event.getTitle());
             if (event.getDescription() != null && !event.getDescription().isBlank()) {
                 sb.append("\n📝 ").append(event.getDescription());
             }

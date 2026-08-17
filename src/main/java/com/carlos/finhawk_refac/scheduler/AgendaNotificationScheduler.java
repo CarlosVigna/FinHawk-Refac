@@ -1,8 +1,11 @@
 package com.carlos.finhawk_refac.scheduler;
 
 import com.carlos.finhawk_refac.entity.AgendaEvent;
+import com.carlos.finhawk_refac.entity.AgendaEventCompletion;
 import com.carlos.finhawk_refac.entity.Bill;
 import com.carlos.finhawk_refac.entity.NotificationLog;
+import com.carlos.finhawk_refac.entity.WeeklyGoal;
+import com.carlos.finhawk_refac.enums.AgendaCompletionStatus;
 import com.carlos.finhawk_refac.enums.AgendaEventType;
 import com.carlos.finhawk_refac.enums.CategoryType;
 import com.carlos.finhawk_refac.enums.StatusBill;
@@ -10,6 +13,7 @@ import com.carlos.finhawk_refac.repository.AgendaEventCompletionRepository;
 import com.carlos.finhawk_refac.repository.AgendaEventRepository;
 import com.carlos.finhawk_refac.repository.BillRepository;
 import com.carlos.finhawk_refac.repository.NotificationLogRepository;
+import com.carlos.finhawk_refac.repository.WeeklyGoalRepository;
 import com.carlos.finhawk_refac.service.DayTypeService;
 import com.carlos.finhawk_refac.service.NotificationMessageBuilder;
 import com.carlos.finhawk_refac.service.WhatsAppNotificationService;
@@ -21,11 +25,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.text.NumberFormat;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -63,10 +69,12 @@ public class AgendaNotificationScheduler {
     // spam diario enquanto o habito continua esquecido.
     private static final int[] HABIT_FORGOTTEN_THRESHOLDS = {2, 5};
     private static final int HABIT_FORGOTTEN_MAX_LOOKBACK_DAYS = 30;
+    private static final String JOB_FULL_MORNING_SUMMARY = "FULL_MORNING_SUMMARY";
 
     private final AgendaEventRepository agendaEventRepository;
     private final BillRepository billRepository;
     private final AgendaEventCompletionRepository agendaEventCompletionRepository;
+    private final WeeklyGoalRepository weeklyGoalRepository;
     private final NotificationLogRepository notificationLogRepository;
     private final WhatsAppNotificationService whatsAppNotificationService;
     private final DayTypeService dayTypeService;
@@ -74,12 +82,14 @@ public class AgendaNotificationScheduler {
     public AgendaNotificationScheduler(AgendaEventRepository agendaEventRepository,
                                         BillRepository billRepository,
                                         AgendaEventCompletionRepository agendaEventCompletionRepository,
+                                        WeeklyGoalRepository weeklyGoalRepository,
                                         NotificationLogRepository notificationLogRepository,
                                         WhatsAppNotificationService whatsAppNotificationService,
                                         DayTypeService dayTypeService) {
         this.agendaEventRepository = agendaEventRepository;
         this.billRepository = billRepository;
         this.agendaEventCompletionRepository = agendaEventCompletionRepository;
+        this.weeklyGoalRepository = weeklyGoalRepository;
         this.notificationLogRepository = notificationLogRepository;
         this.whatsAppNotificationService = whatsAppNotificationService;
         this.dayTypeService = dayTypeService;
@@ -259,6 +269,40 @@ public class AgendaNotificationScheduler {
         }
     }
 
+    // ===== Resumo completo de hoje (7:30): eventos + habitos de hoje (ja =====
+    // ===== cientes de tipo de dia) + metas semanais ainda nao concluidas =====
+    // ===== -- complementa o resumo noturno de 21h (que antecipa "amanha") =====
+
+    @Scheduled(cron = "0 30 7 * * *", zone = "America/Sao_Paulo")
+    @Transactional
+    public void fullMorningSummary() {
+        try {
+            LocalDate today = LocalDate.now(ZONE);
+
+            if (notificationLogRepository.existsByJobKeyAndReferenceDate(JOB_FULL_MORNING_SUMMARY, today)) {
+                return;
+            }
+
+            List<AgendaEvent> oneTimeToday = oneTimeEventsOn(today);
+            List<AgendaEvent> habitsToday = habitsOn(today);
+
+            LocalDate weekMonday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+            List<WeeklyGoal> incompleteGoals = weeklyGoalRepository.findAllByWeekStartDateAndCompletedFalse(weekMonday);
+
+            if (!oneTimeToday.isEmpty() || !habitsToday.isEmpty() || !incompleteGoals.isEmpty()) {
+                StringBuilder sb = new StringBuilder("☀️ Bom dia! Resumo de hoje:\n");
+                appendEventAndHabitLines(sb, oneTimeToday, habitsToday);
+                incompleteGoals.forEach(g -> sb.append("\n🎯 ").append(g.getTitle()));
+
+                whatsAppNotificationService.sendMessage(sb.toString());
+            }
+
+            markSent(JOB_FULL_MORNING_SUMMARY, today);
+        } catch (Exception e) {
+            log.error("Falha no job de resumo matinal completo: {}", e.getMessage(), e);
+        }
+    }
+
     // ===== Contas recem-atrasadas (8h): venceram ontem e continuam PENDING =====
 
     @Scheduled(cron = "0 0 8 * * *", zone = "America/Sao_Paulo")
@@ -402,6 +446,39 @@ public class AgendaNotificationScheduler {
         }
 
         return earliestMissed == null ? null : (int) ChronoUnit.DAYS.between(earliestMissed, today);
+    }
+
+    // ===== Habito concluido, resumo em lote (4h/8h/12h/20h) -- deixou de ser
+    // instantaneo (ver AgendaEventService.markCompletion); cada disparo lista
+    // so o que foi concluido desde o disparo anterior (notifiedAt IS NULL) e
+    // nao repete o que ja foi informado. Silencio se nada foi concluido no
+    // periodo, mesmo padrao dos outros resumos vazios.
+
+    @Scheduled(cron = "0 0 4,8,12,20 * * *", zone = "America/Sao_Paulo")
+    @Transactional
+    public void habitCompletionDigest() {
+        try {
+            List<AgendaEventCompletion> pending = agendaEventCompletionRepository
+                    .findAllByStatusAndNotifiedAtIsNullAndAgendaEvent_Type(AgendaCompletionStatus.DONE, AgendaEventType.HABIT);
+
+            if (pending.isEmpty()) {
+                return;
+            }
+
+            StringBuilder sb = new StringBuilder("✅ Hábitos concluídos:\n");
+            pending.stream()
+                    .sorted((a, b) -> a.getCompletedAt().compareTo(b.getCompletedAt()))
+                    .forEach(c -> sb.append("\n🔁 ").append(c.getAgendaEvent().getTitle())
+                            .append(" — ").append(c.getCompletedAt().format(TIME_FMT)));
+
+            whatsAppNotificationService.sendMessage(sb.toString());
+
+            LocalDateTime now = LocalDateTime.now(ZONE);
+            pending.forEach(c -> c.setNotifiedAt(now));
+            agendaEventCompletionRepository.saveAll(pending);
+        } catch (Exception e) {
+            log.error("Falha no job de resumo de habitos concluidos: {}", e.getMessage(), e);
+        }
     }
 
     // ===== Resumos sob demanda (POST /agenda/notify/*): reaproveitam a mesma

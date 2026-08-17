@@ -34,4 +34,10 @@ public class AgendaEventCompletion {
 
     @Column(name = "completed_at", nullable = false)
     private LocalDateTime completedAt;
+
+    // Somente HABIT+DONE (ver AgendaNotificationScheduler.habitCompletionDigest).
+    // Nulo = ainda nao entrou em nenhum resumo consolidado (4h/8h/12h/20h);
+    // evento pontual notifica na hora e nunca usa este campo.
+    @Column(name = "notified_at")
+    private LocalDateTime notifiedAt;
 }
