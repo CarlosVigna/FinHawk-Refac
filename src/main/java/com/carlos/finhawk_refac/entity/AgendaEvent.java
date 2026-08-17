@@ -76,6 +76,13 @@ public class AgendaEvent {
     @Column(name = "reminder_sent_at")
     private LocalDateTime reminderSentAt;
 
+    // Somente ONE_TIME. Marcado por AgendaRolloverScheduler quando o evento
+    // venceu ontem sem completion DONE -- dispara o check-in "voce ja fez
+    // isso?" no app (nao WhatsApp) na proxima vez que o usuario abrir a
+    // Agenda. Limpo ao responder (ver AgendaEventService.confirmRollover).
+    @Column(name = "pending_rollover", nullable = false)
+    private Boolean pendingRollover = false;
+
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 

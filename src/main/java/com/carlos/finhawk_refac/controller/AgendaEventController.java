@@ -73,4 +73,20 @@ public class AgendaEventController {
         agendaEventService.unmarkCompletion(id, date);
         return ResponseEntity.noContent().build();
     }
+
+    // ===== Rollover de evento nao concluido (check-in dentro do app) =====
+
+    @GetMapping("/account/{accountId}/rollover/pending")
+    public ResponseEntity<List<AgendaEventResponseDTO>> getPendingRollovers(@PathVariable Long accountId) {
+        return ResponseEntity.ok(agendaEventService.getPendingRollovers(accountId));
+    }
+
+    public record RolloverConfirmRequest(boolean done) {}
+
+    @PostMapping("/{id}/rollover/confirm")
+    public ResponseEntity<AgendaEventResponseDTO> confirmRollover(
+            @PathVariable Long id,
+            @RequestBody RolloverConfirmRequest dto) {
+        return ResponseEntity.ok(agendaEventService.confirmRollover(id, dto.done()));
+    }
 }

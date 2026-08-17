@@ -22,6 +22,7 @@ public record AgendaEventResponseDTO(
         Boolean active,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
-        List<DayType> dayTypeTags
+        List<DayType> dayTypeTags,
+        Boolean pendingRollover
 ) {
 }

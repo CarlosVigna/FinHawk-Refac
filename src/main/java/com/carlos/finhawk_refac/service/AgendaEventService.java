@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -135,7 +136,8 @@ public class AgendaEventService {
                 event.getActive(),
                 event.getCreatedAt(),
                 event.getUpdatedAt(),
-                event.getDayTypeTags()
+                event.getDayTypeTags(),
+                event.getPendingRollover()
         );
     }
 
@@ -471,5 +473,64 @@ public class AgendaEventService {
                 .stream()
                 .map(this::toCompletionResponseDTO)
                 .toList();
+    }
+
+    // ===== Rollover de evento nao concluido (check-in dentro do app) =====
+
+    public List<AgendaEventResponseDTO> getPendingRollovers(Long accountId) {
+        UserAccount currentUser = getAuthenticatedUser();
+
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+
+        if (!account.getUserAccount().getId().equals(currentUser.getId())) {
+            throw new RuntimeException("Access denied");
+        }
+
+        return agendaEventRepository
+                .findAllByAccount_IdAndTypeAndPendingRolloverTrueAndDeletedAtIsNull(accountId, AgendaEventType.ONE_TIME)
+                .stream()
+                .map(this::toResponseDTO)
+                .toList();
+    }
+
+    // done=true: confirma que o evento (de ontem) foi feito, grava completion
+    // DONE retroativa pra ontem. done=false: "ainda nao fiz" -- move o evento
+    // pra hoje, mantendo o mesmo horario (decisao combinada: nao pergunta se
+    // quer outro horario). Nenhum dos dois dispara notificacao WhatsApp --
+    // e uma correcao automatica/retroativa, nao uma edicao nova do usuario.
+    @Transactional
+    public AgendaEventResponseDTO confirmRollover(Long id, boolean done) {
+        UserAccount currentUser = getAuthenticatedUser();
+        AgendaEvent event = findOwned(id, currentUser);
+
+        if (!Boolean.TRUE.equals(event.getPendingRollover())) {
+            throw new RuntimeException("Esse evento não tem rollover pendente.");
+        }
+
+        LocalDate yesterday = LocalDate.now(ZONE).minusDays(1);
+
+        if (done) {
+            AgendaEventCompletion completion = agendaEventCompletionRepository
+                    .findByAgendaEvent_IdAndEventDate(id, yesterday)
+                    .orElseGet(AgendaEventCompletion::new);
+            completion.setAgendaEvent(event);
+            completion.setEventDate(yesterday);
+            completion.setStatus(AgendaCompletionStatus.DONE);
+            completion.setCompletedAt(LocalDateTime.now(ZONE));
+            agendaEventCompletionRepository.save(completion);
+        } else {
+            java.time.LocalTime originalTime = event.getEventDateTime().toLocalTime();
+            event.setEventDateTime(LocalDate.now(ZONE).atTime(originalTime));
+            event.setReminderSentAt(null);
+        }
+
+        event.setPendingRollover(false);
+        AgendaEvent updated = agendaEventRepository.save(event);
+
+        auditLogService.record(currentUser, AuditLogService.UPDATE, "AgendaEvent", updated.getId(),
+                updated.getTitle() + " -> rollover confirmado (done=" + done + ")");
+
+        return toResponseDTO(updated);
     }
 }

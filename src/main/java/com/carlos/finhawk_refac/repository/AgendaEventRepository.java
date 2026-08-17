@@ -26,4 +26,9 @@ public interface AgendaEventRepository extends JpaRepository<AgendaEvent, Long> 
 
     // Habitos ativos, usados pelo resumo noturno pra descobrir quais tocam amanha.
     List<AgendaEvent> findAllByTypeAndActiveTrueAndDeletedAtIsNull(AgendaEventType type);
+
+    // Check-in de rollover: eventos ONE_TIME pendentes de confirmacao ("voce
+    // ja fez isso?") de uma conta.
+    List<AgendaEvent> findAllByAccount_IdAndTypeAndPendingRolloverTrueAndDeletedAtIsNull(
+            Long accountId, AgendaEventType type);
 }
