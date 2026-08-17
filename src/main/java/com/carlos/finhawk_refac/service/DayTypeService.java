@@ -1,6 +1,8 @@
 package com.carlos.finhawk_refac.service;
 
+import com.carlos.finhawk_refac.entity.AgendaEvent;
 import com.carlos.finhawk_refac.enums.DayType;
+import com.carlos.finhawk_refac.enums.RecurrenceFrequency;
 import org.springframework.stereotype.Service;
 
 import java.time.DayOfWeek;
@@ -37,5 +39,24 @@ public class DayTypeService {
         tags.add(isWeekend ? DayType.FIM_DE_SEMANA : DayType.ENTREGA);
 
         return tags;
+    }
+
+    // "Esse habito ocorre nessa data?" -- se o habito tiver etiquetas de tipo
+    // de dia configuradas, elas tem prioridade (logica OU: basta uma bater
+    // com o tipo do dia) e a frequencia antiga (DAILY/WEEKLY) e ignorada. Se
+    // nao tiver etiqueta nenhuma, usa a logica antiga como sempre foi.
+    public boolean habitOccursOn(AgendaEvent habit, LocalDate date) {
+        if (habit.getDayTypeTags() != null && !habit.getDayTypeTags().isEmpty()) {
+            Set<DayType> todayTags = calculate(date);
+            return habit.getDayTypeTags().stream().anyMatch(todayTags::contains);
+        }
+
+        if (habit.getRecurrenceFrequency() == RecurrenceFrequency.DAILY) {
+            return true;
+        }
+        if (habit.getRecurrenceFrequency() == RecurrenceFrequency.WEEKLY) {
+            return habit.getDaysOfWeek() != null && habit.getDaysOfWeek().contains(date.getDayOfWeek());
+        }
+        return false;
     }
 }

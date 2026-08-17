@@ -10,6 +10,7 @@ import com.carlos.finhawk_refac.entity.AgendaEventCompletion;
 import com.carlos.finhawk_refac.entity.UserAccount;
 import com.carlos.finhawk_refac.enums.AgendaCompletionStatus;
 import com.carlos.finhawk_refac.enums.AgendaEventType;
+import com.carlos.finhawk_refac.enums.DayType;
 import com.carlos.finhawk_refac.enums.RecurrenceFrequency;
 import com.carlos.finhawk_refac.repository.AccountRepository;
 import com.carlos.finhawk_refac.repository.AgendaEventCompletionRepository;
@@ -88,14 +89,17 @@ public class AgendaEventService {
     }
 
     private String buildHabitUpdatedMessage(AgendaEvent updated, RecurrenceFrequency oldFrequency,
-                                             java.time.LocalTime oldTimeOfDay, List<DayOfWeek> oldDaysOfWeek) {
+                                             java.time.LocalTime oldTimeOfDay, List<DayOfWeek> oldDaysOfWeek,
+                                             List<DayType> oldDayTypeTags) {
         boolean frequencyChanged = !java.util.Objects.equals(oldFrequency, updated.getRecurrenceFrequency())
-                || !java.util.Objects.equals(oldDaysOfWeek, updated.getDaysOfWeek());
+                || !java.util.Objects.equals(oldDaysOfWeek, updated.getDaysOfWeek())
+                || !java.util.Objects.equals(oldDayTypeTags, updated.getDayTypeTags());
         boolean timeChanged = !java.util.Objects.equals(oldTimeOfDay, updated.getTimeOfDay());
 
         String frequencyLine = frequencyChanged
-                ? "⏰ Frequência: " + NotificationMessageBuilder.habitFrequencyLabel(oldFrequency, oldDaysOfWeek)
-                        + " → " + NotificationMessageBuilder.habitFrequencyLabel(updated.getRecurrenceFrequency(), updated.getDaysOfWeek())
+                ? "⏰ Frequência: " + NotificationMessageBuilder.habitFrequencyLabel(oldFrequency, oldDaysOfWeek, oldDayTypeTags)
+                        + " → " + NotificationMessageBuilder.habitFrequencyLabel(
+                                updated.getRecurrenceFrequency(), updated.getDaysOfWeek(), updated.getDayTypeTags())
                 : null;
         String timeLine = timeChanged
                 ? "🕒 Horário: " + (oldTimeOfDay != null ? oldTimeOfDay.format(TIME_FMT) : "-")
@@ -130,7 +134,8 @@ public class AgendaEventService {
                 event.getTimeOfDay(),
                 event.getActive(),
                 event.getCreatedAt(),
-                event.getUpdatedAt()
+                event.getUpdatedAt(),
+                event.getDayTypeTags()
         );
     }
 
@@ -150,11 +155,17 @@ public class AgendaEventService {
                 throw new RuntimeException("A data e hora do evento são obrigatórias para eventos pontuais.");
             }
         } else if (type == AgendaEventType.HABIT) {
-            if (dto.recurrenceFrequency() == null) {
-                throw new RuntimeException("A frequência de recorrência é obrigatória para hábitos.");
-            }
             if (dto.timeOfDay() == null) {
                 throw new RuntimeException("O horário do lembrete é obrigatório para hábitos.");
+            }
+            boolean usesDayType = dto.dayTypeTags() != null && !dto.dayTypeTags().isEmpty();
+            // Etiqueta de tipo de dia e frequencia DAILY/WEEKLY sao alternativas
+            // (ver DayTypeService) -- so exige frequencia se nao tiver etiqueta.
+            if (usesDayType) {
+                return;
+            }
+            if (dto.recurrenceFrequency() == null) {
+                throw new RuntimeException("A frequência de recorrência é obrigatória para hábitos (ou selecione ao menos uma etiqueta de tipo de dia).");
             }
             if (dto.recurrenceFrequency() == RecurrenceFrequency.WEEKLY
                     && (dto.daysOfWeek() == null || dto.daysOfWeek().isEmpty())) {
@@ -198,9 +209,17 @@ public class AgendaEventService {
         if (dto.type() == AgendaEventType.ONE_TIME) {
             event.setEventDateTime(dto.eventDateTime());
         } else {
-            event.setRecurrenceFrequency(dto.recurrenceFrequency());
             event.setTimeOfDay(dto.timeOfDay());
-            event.setDaysOfWeek(dto.recurrenceFrequency() == RecurrenceFrequency.WEEKLY ? dto.daysOfWeek() : null);
+            boolean usesDayType = dto.dayTypeTags() != null && !dto.dayTypeTags().isEmpty();
+            if (usesDayType) {
+                event.setDayTypeTags(dto.dayTypeTags());
+                event.setRecurrenceFrequency(null);
+                event.setDaysOfWeek(null);
+            } else {
+                event.setRecurrenceFrequency(dto.recurrenceFrequency());
+                event.setDaysOfWeek(dto.recurrenceFrequency() == RecurrenceFrequency.WEEKLY ? dto.daysOfWeek() : null);
+                event.setDayTypeTags(null);
+            }
         }
 
         AgendaEvent saved = agendaEventRepository.save(event);
@@ -238,6 +257,7 @@ public class AgendaEventService {
         RecurrenceFrequency oldRecurrenceFrequency = event.getRecurrenceFrequency();
         java.time.LocalTime oldTimeOfDay = event.getTimeOfDay();
         List<DayOfWeek> oldDaysOfWeek = event.getDaysOfWeek();
+        List<DayType> oldDayTypeTags = event.getDayTypeTags();
 
         if (dto.title() != null && !dto.title().isBlank()) {
             event.setTitle(dto.title());
@@ -267,19 +287,35 @@ public class AgendaEventService {
                 event.setRecurrenceFrequency(null);
                 event.setTimeOfDay(null);
                 event.setDaysOfWeek(null);
+                event.setDayTypeTags(null);
             }
         } else {
-            if (dto.recurrenceFrequency() != null) {
-                event.setRecurrenceFrequency(dto.recurrenceFrequency());
-            }
             if (dto.timeOfDay() != null) {
                 event.setTimeOfDay(dto.timeOfDay());
             }
-            if (dto.daysOfWeek() != null) {
-                event.setDaysOfWeek(dto.daysOfWeek());
+
+            // dayTypeTags e frequencia DAILY/WEEKLY sao alternativas -- lista
+            // nao-nula-mas-vazia no dto significa "sair do modo tipo de dia e
+            // voltar pro modo frequencia" (campo ausente/null significa "nao
+            // mexe", igual todo o resto deste metodo).
+            if (dto.dayTypeTags() != null) {
+                event.setDayTypeTags(dto.dayTypeTags().isEmpty() ? null : dto.dayTypeTags());
             }
-            if (event.getRecurrenceFrequency() != RecurrenceFrequency.WEEKLY) {
+
+            boolean usesDayType = event.getDayTypeTags() != null && !event.getDayTypeTags().isEmpty();
+            if (usesDayType) {
+                event.setRecurrenceFrequency(null);
                 event.setDaysOfWeek(null);
+            } else {
+                if (dto.recurrenceFrequency() != null) {
+                    event.setRecurrenceFrequency(dto.recurrenceFrequency());
+                }
+                if (dto.daysOfWeek() != null) {
+                    event.setDaysOfWeek(dto.daysOfWeek());
+                }
+                if (event.getRecurrenceFrequency() != RecurrenceFrequency.WEEKLY) {
+                    event.setDaysOfWeek(null);
+                }
             }
             if (dto.type() != null) {
                 event.setEventDateTime(null);
@@ -307,10 +343,12 @@ public class AgendaEventService {
         } else {
             boolean scheduleChanged = !java.util.Objects.equals(oldRecurrenceFrequency, updated.getRecurrenceFrequency())
                     || !java.util.Objects.equals(oldTimeOfDay, updated.getTimeOfDay())
-                    || !java.util.Objects.equals(oldDaysOfWeek, updated.getDaysOfWeek());
+                    || !java.util.Objects.equals(oldDaysOfWeek, updated.getDaysOfWeek())
+                    || !java.util.Objects.equals(oldDayTypeTags, updated.getDayTypeTags());
 
             if (scheduleChanged) {
-                crudNotificationService.notify(buildHabitUpdatedMessage(updated, oldRecurrenceFrequency, oldTimeOfDay, oldDaysOfWeek));
+                crudNotificationService.notify(
+                        buildHabitUpdatedMessage(updated, oldRecurrenceFrequency, oldTimeOfDay, oldDaysOfWeek, oldDayTypeTags));
             }
         }
 

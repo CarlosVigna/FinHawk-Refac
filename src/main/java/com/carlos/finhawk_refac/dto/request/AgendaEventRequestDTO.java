@@ -1,6 +1,7 @@
 package com.carlos.finhawk_refac.dto.request;
 
 import com.carlos.finhawk_refac.enums.AgendaEventType;
+import com.carlos.finhawk_refac.enums.DayType;
 import com.carlos.finhawk_refac.enums.RecurrenceFrequency;
 import jakarta.validation.constraints.Size;
 
@@ -32,6 +33,10 @@ public record AgendaEventRequestDTO(
 
         LocalTime timeOfDay,
 
-        Boolean active
+        Boolean active,
+
+        // Alternativa a recurrenceFrequency/daysOfWeek pra HABIT -- preenchido,
+        // tem prioridade (ver DayTypeService). Vazia/nula: comportamento antigo.
+        List<DayType> dayTypeTags
 ) {
 }

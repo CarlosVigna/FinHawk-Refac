@@ -1,6 +1,7 @@
 package com.carlos.finhawk_refac.entity;
 
 import com.carlos.finhawk_refac.enums.AgendaEventType;
+import com.carlos.finhawk_refac.enums.DayType;
 import com.carlos.finhawk_refac.enums.RecurrenceFrequency;
 import jakarta.persistence.*;
 import lombok.*;
@@ -56,6 +57,16 @@ public class AgendaEvent {
     // Somente para HABIT
     @Column(name = "time_of_day")
     private LocalTime timeOfDay;
+
+    // Somente para HABIT. Alternativa a recurrenceFrequency/daysOfWeek: se
+    // preenchida, tem prioridade (logica OU -- basta o dia bater com uma das
+    // etiquetas) e a frequencia antiga e ignorada. Vazia/nula -> comportamento
+    // antigo (DAILY/WEEKLY) continua valendo. Ver DayTypeService.
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "agenda_event_day_type", joinColumns = @JoinColumn(name = "agenda_event_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "day_type", nullable = false)
+    private List<DayType> dayTypeTags;
 
     // Permite pausar um habito sem apagar o historico de completions
     @Column(nullable = false)

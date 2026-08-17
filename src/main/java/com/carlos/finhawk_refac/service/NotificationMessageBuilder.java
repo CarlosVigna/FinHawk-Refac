@@ -3,6 +3,7 @@ package com.carlos.finhawk_refac.service;
 import com.carlos.finhawk_refac.entity.Account;
 import com.carlos.finhawk_refac.entity.AgendaEvent;
 import com.carlos.finhawk_refac.entity.Bill;
+import com.carlos.finhawk_refac.enums.DayType;
 import com.carlos.finhawk_refac.enums.Periodicity;
 import com.carlos.finhawk_refac.enums.RecurrenceFrequency;
 import com.carlos.finhawk_refac.enums.StatusBill;
@@ -64,9 +65,27 @@ public final class NotificationMessageBuilder {
         };
     }
 
-    // "Todo dia" (DAILY) ou os dias abreviados em ordem (segunda-first),
-    // independente da ordem em que foram salvos no banco.
-    public static String habitFrequencyLabel(RecurrenceFrequency frequency, List<DayOfWeek> daysOfWeek) {
+    public static String dayTypeLabel(DayType dayType) {
+        return switch (dayType) {
+            case PLANTAO -> "Plantão";
+            case FOLGA -> "Folga";
+            case ENTREGA -> "Entrega";
+            case FIM_DE_SEMANA -> "Fim de semana";
+        };
+    }
+
+    // Etiquetas de tipo de dia (se o habito usar esse modo -- tem prioridade,
+    // ver DayTypeService), senao "Todo dia" (DAILY) ou os dias abreviados em
+    // ordem (segunda-first), independente da ordem em que foram salvos no banco.
+    public static String habitFrequencyLabel(RecurrenceFrequency frequency, List<DayOfWeek> daysOfWeek,
+                                              List<DayType> dayTypeTags) {
+        if (dayTypeTags != null && !dayTypeTags.isEmpty()) {
+            return dayTypeTags.stream()
+                    .map(NotificationMessageBuilder::dayTypeLabel)
+                    .reduce((a, b) -> a + ", " + b)
+                    .orElse("-");
+        }
+
         if (frequency == RecurrenceFrequency.WEEKLY) {
             if (daysOfWeek == null || daysOfWeek.isEmpty()) {
                 return "-";
@@ -181,7 +200,7 @@ public final class NotificationMessageBuilder {
         }
         sb.append("\n").append(frequencyLineOverride != null
                 ? frequencyLineOverride
-                : "⏰ Frequência: " + habitFrequencyLabel(habit.getRecurrenceFrequency(), habit.getDaysOfWeek()));
+                : "⏰ Frequência: " + habitFrequencyLabel(habit.getRecurrenceFrequency(), habit.getDaysOfWeek(), habit.getDayTypeTags()));
         sb.append("\n").append(timeLineOverride != null
                 ? timeLineOverride
                 : "🕒 Horário: " + (habit.getTimeOfDay() != null ? habit.getTimeOfDay().format(TIME_FMT) : "-"));

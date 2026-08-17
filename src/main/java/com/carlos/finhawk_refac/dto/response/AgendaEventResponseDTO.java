@@ -1,6 +1,7 @@
 package com.carlos.finhawk_refac.dto.response;
 
 import com.carlos.finhawk_refac.enums.AgendaEventType;
+import com.carlos.finhawk_refac.enums.DayType;
 import com.carlos.finhawk_refac.enums.RecurrenceFrequency;
 
 import java.time.DayOfWeek;
@@ -20,6 +21,7 @@ public record AgendaEventResponseDTO(
         LocalTime timeOfDay,
         Boolean active,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+        List<DayType> dayTypeTags
 ) {
 }

@@ -5,12 +5,12 @@ import com.carlos.finhawk_refac.entity.Bill;
 import com.carlos.finhawk_refac.entity.NotificationLog;
 import com.carlos.finhawk_refac.enums.AgendaEventType;
 import com.carlos.finhawk_refac.enums.CategoryType;
-import com.carlos.finhawk_refac.enums.RecurrenceFrequency;
 import com.carlos.finhawk_refac.enums.StatusBill;
 import com.carlos.finhawk_refac.repository.AgendaEventCompletionRepository;
 import com.carlos.finhawk_refac.repository.AgendaEventRepository;
 import com.carlos.finhawk_refac.repository.BillRepository;
 import com.carlos.finhawk_refac.repository.NotificationLogRepository;
+import com.carlos.finhawk_refac.service.DayTypeService;
 import com.carlos.finhawk_refac.service.NotificationMessageBuilder;
 import com.carlos.finhawk_refac.service.WhatsAppNotificationService;
 import org.slf4j.Logger;
@@ -69,17 +69,20 @@ public class AgendaNotificationScheduler {
     private final AgendaEventCompletionRepository agendaEventCompletionRepository;
     private final NotificationLogRepository notificationLogRepository;
     private final WhatsAppNotificationService whatsAppNotificationService;
+    private final DayTypeService dayTypeService;
 
     public AgendaNotificationScheduler(AgendaEventRepository agendaEventRepository,
                                         BillRepository billRepository,
                                         AgendaEventCompletionRepository agendaEventCompletionRepository,
                                         NotificationLogRepository notificationLogRepository,
-                                        WhatsAppNotificationService whatsAppNotificationService) {
+                                        WhatsAppNotificationService whatsAppNotificationService,
+                                        DayTypeService dayTypeService) {
         this.agendaEventRepository = agendaEventRepository;
         this.billRepository = billRepository;
         this.agendaEventCompletionRepository = agendaEventCompletionRepository;
         this.notificationLogRepository = notificationLogRepository;
         this.whatsAppNotificationService = whatsAppNotificationService;
+        this.dayTypeService = dayTypeService;
     }
 
     private static String formatCurrency(BigDecimal value) {
@@ -87,14 +90,13 @@ public class AgendaNotificationScheduler {
         return fmt.format(value != null ? value : BigDecimal.ZERO);
     }
 
+    // Delega pra DayTypeService (unica fonte de verdade de "esse habito
+    // ocorre nessa data", agora ciente de etiquetas de tipo de dia alem da
+    // frequencia DAILY/WEEKLY antiga) -- mantido como metodo local pra nao
+    // precisar tocar em todo call site existente (nightlySummary,
+    // forgottenHabits, notifyToday).
     private boolean habitOccursOn(AgendaEvent habit, LocalDate date) {
-        if (habit.getRecurrenceFrequency() == RecurrenceFrequency.DAILY) {
-            return true;
-        }
-        if (habit.getRecurrenceFrequency() == RecurrenceFrequency.WEEKLY) {
-            return habit.getDaysOfWeek() != null && habit.getDaysOfWeek().contains(date.getDayOfWeek());
-        }
-        return false;
+        return dayTypeService.habitOccursOn(habit, date);
     }
 
     // Eventos pontuais ativos programados pra uma data especifica -- usado
