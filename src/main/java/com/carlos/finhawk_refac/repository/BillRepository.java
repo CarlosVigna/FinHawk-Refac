@@ -31,4 +31,11 @@ public interface BillRepository extends JpaRepository<Bill, Long> {
     List<Bill> findAllByMaturityAndStatus(LocalDate maturity, StatusBill status);
 
     List<Bill> findAllByMaturityBetweenAndStatus(LocalDate start, LocalDate end, StatusBill status);
+
+    // Todos os status (nao so PENDING) -- usados pelos resumos de hoje/semana
+    // (Parte 3), que mostram tanto o que falta quanto o que ja foi pago/
+    // recebido, em vez de so o que esta pendente.
+    List<Bill> findAllByMaturity(LocalDate maturity);
+
+    List<Bill> findAllByMaturityBetween(LocalDate start, LocalDate end);
 }

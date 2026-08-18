@@ -32,10 +32,11 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 // Schedulers da agenda/vencimentos -- todos no fuso America/Sao_Paulo.
 // Cada job so envia notificacao se houver conteudo, e cada job de
@@ -207,7 +208,68 @@ public class AgendaNotificationScheduler {
         }
     }
 
-    // ===== Resumo semanal (domingo, 21h): vencimentos dos proximos 7 dias =====
+    // ===== Resumo semanal (domingo, 21h): eventos + contas vencendo nos =====
+    // ===== proximos 7 dias + metas semanais atuais, separado em =====
+    // ===== "ainda falta" / "ja feito" (Parte 3) =====
+
+    // Compartilhado entre o job de domingo e o botao sob demanda "Resumo da
+    // semana" -- mesma estrutura de buildTodaySummary, mas pra itens dos
+    // proximos 7 dias em vez de so hoje. Habitos ficam de fora de proposito
+    // (cadencia diaria, nao fazem sentido numa visao semanal de itens com
+    // data propria); eventos, contas e metas sim.
+    private SummaryResult buildWeekSummary(LocalDate today) {
+        LocalDate start = today.plusDays(1);
+        LocalDate end = today.plusDays(7);
+
+        List<AgendaEvent> weekEvents = agendaEventRepository
+                .findAllByTypeAndActiveTrueAndDeletedAtIsNullAndEventDateTimeBetween(
+                        AgendaEventType.ONE_TIME, start.atStartOfDay(), end.plusDays(1).atStartOfDay());
+        List<Bill> bills = billRepository.findAllByMaturityBetween(start, end);
+
+        LocalDate weekMonday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        List<WeeklyGoal> weekGoals = weeklyGoalRepository.findAllByWeekStartDate(weekMonday);
+
+        Set<Long> doneIds = agendaEventCompletionRepository.findAllByEventDateBetween(start, end).stream()
+                .filter(c -> c.getStatus() == AgendaCompletionStatus.DONE)
+                .map(c -> c.getAgendaEvent().getId())
+                .collect(Collectors.toSet());
+
+        int itemCount = weekEvents.size() + bills.size() + weekGoals.size();
+        if (itemCount == 0) {
+            return new SummaryResult(null, 0);
+        }
+
+        StringBuilder pending = new StringBuilder();
+        StringBuilder done = new StringBuilder();
+
+        weekEvents.stream()
+                .sorted((a, b) -> a.getEventDateTime().compareTo(b.getEventDateTime()))
+                .forEach(e -> (doneIds.contains(e.getId()) ? done : pending)
+                        .append("\n📅 ").append(e.getEventDateTime().format(DATE_FMT))
+                        .append(" — ").append(e.getTitle()).append(" às ").append(e.getEventDateTime().format(TIME_FMT)));
+
+        bills.stream()
+                .sorted((a, b) -> a.getMaturity().compareTo(b.getMaturity()))
+                .forEach(b -> {
+                    boolean settled = b.getStatus() == StatusBill.PAID || b.getStatus() == StatusBill.RECEIVED;
+                    (settled ? done : pending).append("\n💰 ").append(b.getMaturity().format(DATE_FMT))
+                            .append(" — ").append(b.getDescription())
+                            .append(" — ").append(formatCurrency(b.getInstallmentAmount()));
+                });
+
+        weekGoals.forEach(g -> (Boolean.TRUE.equals(g.getCompleted()) ? done : pending)
+                .append("\n🎯 ").append(g.getTitle()));
+
+        StringBuilder sb = new StringBuilder("📅 Semana (" + start.format(DATE_FMT) + " a " + end.format(DATE_FMT) + "):\n");
+        if (!pending.isEmpty()) {
+            sb.append("\n⏳ Ainda falta:").append(pending);
+        }
+        if (!done.isEmpty()) {
+            sb.append("\n\n✅ Já feito:").append(done);
+        }
+
+        return new SummaryResult(sb.toString(), itemCount);
+    }
 
     @Scheduled(cron = "0 0 21 * * SUN", zone = "America/Sao_Paulo")
     @Transactional
@@ -219,20 +281,9 @@ public class AgendaNotificationScheduler {
                 return;
             }
 
-            LocalDate start = today.plusDays(1);
-            LocalDate end = today.plusDays(7);
-
-            List<Bill> bills = billRepository.findAllByMaturityBetweenAndStatus(start, end, StatusBill.PENDING);
-
-            if (!bills.isEmpty()) {
-                StringBuilder sb = new StringBuilder("📆 Resumo da semana — vencimentos dos próximos 7 dias:\n");
-                bills.stream()
-                        .sorted((a, b) -> a.getMaturity().compareTo(b.getMaturity()))
-                        .forEach(b -> sb.append("\n💰 ").append(b.getMaturity().format(DATE_FMT))
-                                .append(" — ").append(b.getDescription())
-                                .append(" — ").append(formatCurrency(b.getInstallmentAmount())));
-
-                whatsAppNotificationService.sendMessage(sb.toString());
+            SummaryResult result = buildWeekSummary(today);
+            if (result.message() != null) {
+                whatsAppNotificationService.sendMessage(result.message());
             }
 
             markSent(JOB_WEEKLY_SUMMARY, today);
@@ -270,8 +321,68 @@ public class AgendaNotificationScheduler {
     }
 
     // ===== Resumo completo de hoje (7:30): eventos + habitos de hoje (ja =====
-    // ===== cientes de tipo de dia) + metas semanais ainda nao concluidas =====
+    // ===== cientes de tipo de dia) + contas vencendo hoje + metas semanais =====
+    // ===== atuais, cada grupo separado em "ainda falta" / "ja feito" =====
     // ===== -- complementa o resumo noturno de 21h (que antecipa "amanha") =====
+
+    private record SummaryResult(String message, int itemCount) {}
+
+    // Compartilhado entre o job automatico das 7:30 e o botao sob demanda
+    // "Resumo de hoje" -- os dois precisam mostrar exatamente a mesma
+    // estrutura (Parte 3), so diferem em quando disparam e se ficam em
+    // silencio quando nao ha nada (job automatico) ou sempre respondem
+    // (botao, ver notifyToday). message == null quando nao ha nenhum item
+    // (nem pendente nem feito) pra mostrar.
+    private SummaryResult buildTodaySummary(LocalDate today) {
+        List<AgendaEvent> oneTimeToday = oneTimeEventsOn(today);
+        List<AgendaEvent> habitsToday = habitsOn(today);
+        List<Bill> billsToday = billRepository.findAllByMaturity(today);
+
+        LocalDate weekMonday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        List<WeeklyGoal> weekGoals = weeklyGoalRepository.findAllByWeekStartDate(weekMonday);
+
+        Set<Long> doneIds = agendaEventCompletionRepository.findAllByEventDate(today).stream()
+                .filter(c -> c.getStatus() == AgendaCompletionStatus.DONE)
+                .map(c -> c.getAgendaEvent().getId())
+                .collect(Collectors.toSet());
+
+        int itemCount = oneTimeToday.size() + habitsToday.size() + billsToday.size() + weekGoals.size();
+        if (itemCount == 0) {
+            return new SummaryResult(null, 0);
+        }
+
+        StringBuilder pending = new StringBuilder();
+        StringBuilder done = new StringBuilder();
+
+        oneTimeToday.stream()
+                .sorted((a, b) -> a.getEventDateTime().compareTo(b.getEventDateTime()))
+                .forEach(e -> (doneIds.contains(e.getId()) ? done : pending)
+                        .append("\n📅 ").append(e.getTitle()).append(" às ").append(e.getEventDateTime().format(TIME_FMT)));
+
+        habitsToday.stream()
+                .sorted((a, b) -> a.getTimeOfDay().compareTo(b.getTimeOfDay()))
+                .forEach(h -> (doneIds.contains(h.getId()) ? done : pending)
+                        .append("\n🔁 ").append(h.getTitle()).append(" às ").append(h.getTimeOfDay().format(TIME_FMT)));
+
+        billsToday.forEach(b -> {
+            boolean settled = b.getStatus() == StatusBill.PAID || b.getStatus() == StatusBill.RECEIVED;
+            (settled ? done : pending).append("\n💰 ").append(b.getDescription())
+                    .append(" — ").append(formatCurrency(b.getInstallmentAmount()));
+        });
+
+        weekGoals.forEach(g -> (Boolean.TRUE.equals(g.getCompleted()) ? done : pending)
+                .append("\n🎯 ").append(g.getTitle()));
+
+        StringBuilder sb = new StringBuilder("📆 Hoje (" + today.format(DATE_FMT) + "):\n");
+        if (!pending.isEmpty()) {
+            sb.append("\n⏳ Ainda falta:").append(pending);
+        }
+        if (!done.isEmpty()) {
+            sb.append("\n\n✅ Já feito:").append(done);
+        }
+
+        return new SummaryResult(sb.toString(), itemCount);
+    }
 
     @Scheduled(cron = "0 30 7 * * *", zone = "America/Sao_Paulo")
     @Transactional
@@ -283,18 +394,9 @@ public class AgendaNotificationScheduler {
                 return;
             }
 
-            List<AgendaEvent> oneTimeToday = oneTimeEventsOn(today);
-            List<AgendaEvent> habitsToday = habitsOn(today);
-
-            LocalDate weekMonday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
-            List<WeeklyGoal> incompleteGoals = weeklyGoalRepository.findAllByWeekStartDateAndCompletedFalse(weekMonday);
-
-            if (!oneTimeToday.isEmpty() || !habitsToday.isEmpty() || !incompleteGoals.isEmpty()) {
-                StringBuilder sb = new StringBuilder("☀️ Bom dia! Resumo de hoje:\n");
-                appendEventAndHabitLines(sb, oneTimeToday, habitsToday);
-                incompleteGoals.forEach(g -> sb.append("\n🎯 ").append(g.getTitle()));
-
-                whatsAppNotificationService.sendMessage(sb.toString());
+            SummaryResult result = buildTodaySummary(today);
+            if (result.message() != null) {
+                whatsAppNotificationService.sendMessage(result.message());
             }
 
             markSent(JOB_FULL_MORNING_SUMMARY, today);
@@ -489,53 +591,27 @@ public class AgendaNotificationScheduler {
     // fez nada. Retornam a quantidade de itens incluidos na mensagem.
 
     public int notifyToday() {
-        LocalDate today = LocalDate.now(ZONE);
+        SummaryResult result = buildTodaySummary(LocalDate.now(ZONE));
 
-        List<AgendaEvent> oneTimeToday = oneTimeEventsOn(today);
-        List<AgendaEvent> habitsToday = habitsOn(today);
-        List<Bill> billsToday = billRepository.findAllByMaturityAndStatus(today, StatusBill.PENDING);
-
-        int itemCount = oneTimeToday.size() + habitsToday.size() + billsToday.size();
-
-        if (itemCount == 0) {
+        if (result.message() == null) {
             whatsAppNotificationService.sendMessage("📆 Hoje: nada agendado e nenhuma conta vencendo. 🎉");
             return 0;
         }
 
-        List<String> blocks = new ArrayList<>();
-        oneTimeToday.stream()
-                .sorted((a, b) -> a.getEventDateTime().compareTo(b.getEventDateTime()))
-                .forEach(e -> blocks.add(NotificationMessageBuilder.eventBlock(e)));
-        habitsToday.stream()
-                .sorted((a, b) -> a.getTimeOfDay().compareTo(b.getTimeOfDay()))
-                .forEach(h -> blocks.add(NotificationMessageBuilder.habitBlock(h)));
-        billsToday.stream()
-                .sorted((a, b) -> a.getMaturity().compareTo(b.getMaturity()))
-                .forEach(b -> blocks.add(NotificationMessageBuilder.billBlock(b)));
-
-        whatsAppNotificationService.sendMessage("📆 Hoje:\n\n" + String.join("\n\n", blocks));
-        return itemCount;
+        whatsAppNotificationService.sendMessage(result.message());
+        return result.itemCount();
     }
 
     public int notifyWeek() {
-        LocalDate today = LocalDate.now(ZONE);
-        LocalDate start = today.plusDays(1);
-        LocalDate end = today.plusDays(7);
+        SummaryResult result = buildWeekSummary(LocalDate.now(ZONE));
 
-        List<Bill> bills = billRepository.findAllByMaturityBetweenAndStatus(start, end, StatusBill.PENDING);
-
-        if (bills.isEmpty()) {
-            whatsAppNotificationService.sendMessage("📅 Próximos 7 dias: nenhuma conta vencendo. 🎉");
+        if (result.message() == null) {
+            whatsAppNotificationService.sendMessage("📅 Próximos 7 dias: nada agendado e nenhuma conta vencendo. 🎉");
             return 0;
         }
 
-        List<String> blocks = bills.stream()
-                .sorted((a, b) -> a.getMaturity().compareTo(b.getMaturity()))
-                .map(NotificationMessageBuilder::billBlock)
-                .toList();
-
-        whatsAppNotificationService.sendMessage("📅 Próximos 7 dias:\n\n" + String.join("\n\n", blocks));
-        return bills.size();
+        whatsAppNotificationService.sendMessage(result.message());
+        return result.itemCount();
     }
 
     public int notifyOpenBills() {

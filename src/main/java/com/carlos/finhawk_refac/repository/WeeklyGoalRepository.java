@@ -15,4 +15,8 @@ public interface WeeklyGoalRepository extends JpaRepository<WeeklyGoal, Long> {
     // Usado pelo WeeklyGoalScheduler (rollover semanal) e pelo resumo das
     // 07:30 (metas ainda nao concluidas).
     List<WeeklyGoal> findAllByWeekStartDateAndCompletedFalse(LocalDate weekStartDate);
+
+    // Resumos de hoje/semana (Parte 3) -- todas as metas da semana atual
+    // (feitas e pendentes), pra mostrar nas duas secoes.
+    List<WeeklyGoal> findAllByWeekStartDate(LocalDate weekStartDate);
 }

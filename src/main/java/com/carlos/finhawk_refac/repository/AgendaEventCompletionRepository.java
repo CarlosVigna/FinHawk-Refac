@@ -20,4 +20,10 @@ public interface AgendaEventCompletionRepository extends JpaRepository<AgendaEve
     // Resumo consolidado de habito concluido (AgendaNotificationScheduler.habitCompletionDigest).
     List<AgendaEventCompletion> findAllByStatusAndNotifiedAtIsNullAndAgendaEvent_Type(
             AgendaCompletionStatus status, AgendaEventType type);
+
+    // Resumos de hoje/semana (Parte 3) -- todas as contas, pra saber quais
+    // eventos/habitos ja tem completion DONE numa data (ou intervalo).
+    List<AgendaEventCompletion> findAllByEventDate(LocalDate eventDate);
+
+    List<AgendaEventCompletion> findAllByEventDateBetween(LocalDate start, LocalDate end);
 }
