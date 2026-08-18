@@ -2,10 +2,13 @@ package com.carlos.finhawk_refac.controller;
 
 import com.carlos.finhawk_refac.dto.request.AgendaEventCompletionRequestDTO;
 import com.carlos.finhawk_refac.dto.request.AgendaEventRequestDTO;
+import com.carlos.finhawk_refac.dto.request.DayTypeOverrideRequestDTO;
 import com.carlos.finhawk_refac.dto.response.AgendaEventCompletionResponseDTO;
 import com.carlos.finhawk_refac.dto.response.AgendaEventResponseDTO;
+import com.carlos.finhawk_refac.dto.response.DayTypeResponseDTO;
 import com.carlos.finhawk_refac.enums.AgendaEventType;
 import com.carlos.finhawk_refac.service.AgendaEventService;
+import com.carlos.finhawk_refac.service.DayTypeService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -18,9 +21,11 @@ import java.util.List;
 public class AgendaEventController {
 
     private final AgendaEventService agendaEventService;
+    private final DayTypeService dayTypeService;
 
-    public AgendaEventController(AgendaEventService agendaEventService) {
+    public AgendaEventController(AgendaEventService agendaEventService, DayTypeService dayTypeService) {
         this.agendaEventService = agendaEventService;
+        this.dayTypeService = dayTypeService;
     }
 
     @PostMapping
@@ -88,5 +93,21 @@ public class AgendaEventController {
             @PathVariable Long id,
             @RequestBody RolloverConfirmRequest dto) {
         return ResponseEntity.ok(agendaEventService.confirmRollover(id, dto.done()));
+    }
+
+    // ===== Tipo de dia manual (plantao/folga) =====
+
+    @GetMapping("/account/{accountId}/day-type")
+    public ResponseEntity<DayTypeResponseDTO> getDayType(
+            @PathVariable Long accountId,
+            @RequestParam LocalDate date) {
+        return ResponseEntity.ok(dayTypeService.getEffectiveDayType(accountId, date));
+    }
+
+    @PutMapping("/account/{accountId}/day-type-override")
+    public ResponseEntity<DayTypeResponseDTO> setDayTypeOverride(
+            @PathVariable Long accountId,
+            @RequestBody DayTypeOverrideRequestDTO dto) {
+        return ResponseEntity.ok(dayTypeService.setOverride(accountId, dto));
     }
 }
