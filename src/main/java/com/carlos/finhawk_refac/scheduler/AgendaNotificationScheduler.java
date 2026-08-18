@@ -32,6 +32,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -61,7 +62,6 @@ public class AgendaNotificationScheduler {
 
     private static final String JOB_NIGHTLY_SUMMARY = "NIGHTLY_SUMMARY";
     private static final String JOB_WEEKLY_SUMMARY = "WEEKLY_SUMMARY";
-    private static final String JOB_MORNING_DUE_TODAY = "MORNING_DUE_TODAY";
     private static final String JOB_OVERDUE_BILLS = "OVERDUE_BILLS";
     private static final String JOB_MONTHLY_CLOSING = "MONTHLY_CLOSING";
     private static final String JOB_HABIT_FORGOTTEN_PREFIX = "HABIT_FORGOTTEN_";
@@ -239,36 +239,38 @@ public class AgendaNotificationScheduler {
             return new SummaryResult(null, 0);
         }
 
-        StringBuilder pending = new StringBuilder();
-        StringBuilder done = new StringBuilder();
+        List<String> pending = new ArrayList<>();
+        List<String> done = new ArrayList<>();
 
         weekEvents.stream()
                 .sorted((a, b) -> a.getEventDateTime().compareTo(b.getEventDateTime()))
-                .forEach(e -> (doneIds.contains(e.getId()) ? done : pending)
-                        .append("\n📅 ").append(e.getEventDateTime().format(DATE_FMT))
-                        .append(" — ").append(e.getTitle()).append(" às ").append(e.getEventDateTime().format(TIME_FMT)));
+                .forEach(e -> (doneIds.contains(e.getId()) ? done : pending).add(NotificationMessageBuilder.eventBlock(e)));
 
         bills.stream()
                 .sorted((a, b) -> a.getMaturity().compareTo(b.getMaturity()))
                 .forEach(b -> {
                     boolean settled = b.getStatus() == StatusBill.PAID || b.getStatus() == StatusBill.RECEIVED;
-                    (settled ? done : pending).append("\n💰 ").append(b.getMaturity().format(DATE_FMT))
-                            .append(" — ").append(b.getDescription())
-                            .append(" — ").append(formatCurrency(b.getInstallmentAmount()));
+                    (settled ? done : pending).add(NotificationMessageBuilder.billBlock(b));
                 });
 
-        weekGoals.forEach(g -> (Boolean.TRUE.equals(g.getCompleted()) ? done : pending)
-                .append("\n🎯 ").append(g.getTitle()));
+        weekGoals.forEach(g -> (Boolean.TRUE.equals(g.getCompleted()) ? done : pending).add("🎯 " + g.getTitle()));
 
-        StringBuilder sb = new StringBuilder("📅 Semana (" + start.format(DATE_FMT) + " a " + end.format(DATE_FMT) + "):\n");
+        String message = renderSummary("📅 Semana (" + start.format(DATE_FMT) + " a " + end.format(DATE_FMT) + "):", pending, done);
+        return new SummaryResult(message, itemCount);
+    }
+
+    // Compartilhado entre buildTodaySummary e buildWeekSummary -- monta o
+    // cabecalho + as duas secoes (blocos detalhados separados por linha em
+    // branco), omitindo por completo a secao que estiver vazia.
+    private String renderSummary(String header, List<String> pending, List<String> done) {
+        StringBuilder sb = new StringBuilder(header);
         if (!pending.isEmpty()) {
-            sb.append("\n⏳ Ainda falta:").append(pending);
+            sb.append("\n\n⏳ Ainda falta:\n\n").append(String.join("\n\n", pending));
         }
         if (!done.isEmpty()) {
-            sb.append("\n\n✅ Já feito:").append(done);
+            sb.append("\n\n✅ Já feito:\n\n").append(String.join("\n\n", done));
         }
-
-        return new SummaryResult(sb.toString(), itemCount);
+        return sb.toString();
     }
 
     @Scheduled(cron = "0 0 21 * * SUN", zone = "America/Sao_Paulo")
@@ -289,34 +291,6 @@ public class AgendaNotificationScheduler {
             markSent(JOB_WEEKLY_SUMMARY, today);
         } catch (Exception e) {
             log.error("Falha no job de resumo semanal de vencimentos: {}", e.getMessage(), e);
-        }
-    }
-
-    // ===== Aviso matinal de vencimento hoje (7h) =====
-
-    @Scheduled(cron = "0 0 7 * * *", zone = "America/Sao_Paulo")
-    @Transactional
-    public void morningDueToday() {
-        try {
-            LocalDate today = LocalDate.now(ZONE);
-
-            if (notificationLogRepository.existsByJobKeyAndReferenceDate(JOB_MORNING_DUE_TODAY, today)) {
-                return;
-            }
-
-            List<Bill> bills = billRepository.findAllByMaturityAndStatus(today, StatusBill.PENDING);
-
-            if (!bills.isEmpty()) {
-                StringBuilder sb = new StringBuilder("☀️ Bom dia! Vence hoje:\n");
-                bills.forEach(b -> sb.append("\n💰 ").append(b.getDescription())
-                        .append(" — ").append(formatCurrency(b.getInstallmentAmount())));
-
-                whatsAppNotificationService.sendMessage(sb.toString());
-            }
-
-            markSent(JOB_MORNING_DUE_TODAY, today);
-        } catch (Exception e) {
-            log.error("Falha no job de aviso matinal de vencimento: {}", e.getMessage(), e);
         }
     }
 
@@ -351,37 +325,26 @@ public class AgendaNotificationScheduler {
             return new SummaryResult(null, 0);
         }
 
-        StringBuilder pending = new StringBuilder();
-        StringBuilder done = new StringBuilder();
+        List<String> pending = new ArrayList<>();
+        List<String> done = new ArrayList<>();
 
         oneTimeToday.stream()
                 .sorted((a, b) -> a.getEventDateTime().compareTo(b.getEventDateTime()))
-                .forEach(e -> (doneIds.contains(e.getId()) ? done : pending)
-                        .append("\n📅 ").append(e.getTitle()).append(" às ").append(e.getEventDateTime().format(TIME_FMT)));
+                .forEach(e -> (doneIds.contains(e.getId()) ? done : pending).add(NotificationMessageBuilder.eventBlock(e)));
 
         habitsToday.stream()
                 .sorted((a, b) -> a.getTimeOfDay().compareTo(b.getTimeOfDay()))
-                .forEach(h -> (doneIds.contains(h.getId()) ? done : pending)
-                        .append("\n🔁 ").append(h.getTitle()).append(" às ").append(h.getTimeOfDay().format(TIME_FMT)));
+                .forEach(h -> (doneIds.contains(h.getId()) ? done : pending).add(NotificationMessageBuilder.habitBlock(h)));
 
         billsToday.forEach(b -> {
             boolean settled = b.getStatus() == StatusBill.PAID || b.getStatus() == StatusBill.RECEIVED;
-            (settled ? done : pending).append("\n💰 ").append(b.getDescription())
-                    .append(" — ").append(formatCurrency(b.getInstallmentAmount()));
+            (settled ? done : pending).add(NotificationMessageBuilder.billBlock(b));
         });
 
-        weekGoals.forEach(g -> (Boolean.TRUE.equals(g.getCompleted()) ? done : pending)
-                .append("\n🎯 ").append(g.getTitle()));
+        weekGoals.forEach(g -> (Boolean.TRUE.equals(g.getCompleted()) ? done : pending).add("🎯 " + g.getTitle()));
 
-        StringBuilder sb = new StringBuilder("📆 Hoje (" + today.format(DATE_FMT) + "):\n");
-        if (!pending.isEmpty()) {
-            sb.append("\n⏳ Ainda falta:").append(pending);
-        }
-        if (!done.isEmpty()) {
-            sb.append("\n\n✅ Já feito:").append(done);
-        }
-
-        return new SummaryResult(sb.toString(), itemCount);
+        String message = renderSummary("📆 Hoje (" + today.format(DATE_FMT) + "):", pending, done);
+        return new SummaryResult(message, itemCount);
     }
 
     @Scheduled(cron = "0 30 7 * * *", zone = "America/Sao_Paulo")
