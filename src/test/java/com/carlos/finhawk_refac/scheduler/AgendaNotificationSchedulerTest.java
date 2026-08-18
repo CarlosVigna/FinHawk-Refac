@@ -114,6 +114,14 @@ class AgendaNotificationSchedulerTest {
         return captor.getValue();
     }
 
+    // Mesmo formatador usado em producao (AgendaNotificationScheduler.formatCurrency)
+    // -- evita hardcodar o espaco entre "R$" e o valor, que em alguns JDKs e um
+    // non-breaking space (U+00A0), nao um espaco comum.
+    private static String currency(long value) {
+        return java.text.NumberFormat.getCurrencyInstance(new java.util.Locale("pt", "BR"))
+                .format(BigDecimal.valueOf(value));
+    }
+
     // ===== notifyToday =====
 
     @Test
@@ -184,6 +192,56 @@ class AgendaNotificationSchedulerTest {
         assertThat(message).doesNotContain("⏳ Ainda falta:");
         assertThat(message).contains("✅ Já feito:");
         assertThat(message).contains("Consulta médica");
+    }
+
+    @Test
+    void notifyToday_formatoCompacto_semRotulosRedundantes_comMarcaDeFeito() {
+        LocalDate today = today();
+        AgendaEvent pendingEvent = oneTimeEvent(1L, "Consulta médica", today, LocalTime.of(14, 30));
+        AgendaEvent doneEvent = oneTimeEvent(2L, "Dentista", today, LocalTime.of(9, 0));
+        AgendaEvent pendingHabit = habit(3L, "Tomar remédio", LocalTime.of(8, 0));
+        AgendaEvent doneHabit = habit(7L, "Alongamento", LocalTime.of(7, 0));
+        Bill pendingBill = bill(4L, "Luz", today, StatusBill.PENDING);
+        Bill paidBill = bill(5L, "Água", today, StatusBill.PAID);
+        Bill receivedBill = bill(6L, "Salário", today, StatusBill.RECEIVED);
+
+        when(agendaEventRepository.findAllByTypeAndActiveTrueAndDeletedAtIsNullAndEventDateTimeBetween(
+                AgendaEventType.ONE_TIME, today.atStartOfDay(), today.plusDays(1).atStartOfDay()))
+                .thenReturn(List.of(pendingEvent, doneEvent));
+        when(agendaEventRepository.findAllByTypeAndActiveTrueAndDeletedAtIsNull(AgendaEventType.HABIT))
+                .thenReturn(List.of(pendingHabit, doneHabit));
+        when(dayTypeService.habitOccursOn(any(), any())).thenReturn(true);
+        when(billRepository.findAllByMaturity(today)).thenReturn(List.of(pendingBill, paidBill, receivedBill));
+
+        LocalDate weekMonday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        when(weeklyGoalRepository.findAllByWeekStartDate(weekMonday)).thenReturn(List.of());
+
+        when(agendaEventCompletionRepository.findAllByEventDate(today))
+                .thenReturn(List.of(doneCompletion(doneEvent), doneCompletion(doneHabit)));
+
+        scheduler.notifyToday();
+
+        String message = captureSentMessage();
+
+        // sem rotulo "Título:" (formato completo do NotificationMessageBuilder)
+        assertThat(message).doesNotContain("Título:");
+        // sem linha de status generica -- so o marcador de feito, quando aplicavel
+        assertThat(message).doesNotContain("📌 Status:");
+
+        // evento/habito pendentes: sem "✅ Feito"
+        assertThat(message)
+                .contains("📌 Consulta médica\n🕒 Hora: 14:30")
+                .contains("🔁 Tomar remédio\n🕒 Horário: 08:00");
+
+        // evento feito: com "✅ Feito" logo apos a linha de hora
+        assertThat(message).contains("📌 Dentista\n🕒 Hora: 09:00\n✅ Feito");
+
+        // contas: pendente sem marca, pago/recebido com a marca certa
+        String cem = currency(100);
+        assertThat(message).contains("💰 Luz — " + cem);
+        assertThat(message).doesNotContain("💰 Luz — " + cem + "\n✅");
+        assertThat(message).contains("💰 Água — " + cem + "\n✅ Pago");
+        assertThat(message).contains("💰 Salário — " + cem + "\n✅ Recebido");
     }
 
     @Test

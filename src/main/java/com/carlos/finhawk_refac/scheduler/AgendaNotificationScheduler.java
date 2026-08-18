@@ -101,6 +101,43 @@ public class AgendaNotificationScheduler {
         return fmt.format(value != null ? value : BigDecimal.ZERO);
     }
 
+    // ===== Blocos compactos pros resumos (buildTodaySummary/buildWeekSummary) =====
+    // Deliberadamente mais enxutos que NotificationMessageBuilder (usado nas
+    // notificacoes individuais de CRUD): sem rotulo de "Título:", sem linha
+    // de data (implicita pela secao "hoje"/"essa semana") e sem linha de
+    // status generica (implicita por estar em "falta" ou "feito") -- so um
+    // "✅ Feito"/"Pago"/"Recebido" quando o item ja foi concluido.
+
+    private String summaryEventBlock(AgendaEvent event, boolean done) {
+        StringBuilder sb = new StringBuilder("📌 ").append(event.getTitle());
+        if (event.getDescription() != null && !event.getDescription().isBlank()) {
+            sb.append("\n📝 ").append(event.getDescription());
+        }
+        sb.append("\n🕒 Hora: ").append(event.getEventDateTime().toLocalTime().format(TIME_FMT));
+        if (done) {
+            sb.append("\n✅ Feito");
+        }
+        return sb.toString();
+    }
+
+    private String summaryHabitBlock(AgendaEvent habit, boolean done) {
+        StringBuilder sb = new StringBuilder("🔁 ").append(habit.getTitle())
+                .append("\n🕒 Horário: ").append(habit.getTimeOfDay().format(TIME_FMT));
+        if (done) {
+            sb.append("\n✅ Feito");
+        }
+        return sb.toString();
+    }
+
+    private String summaryBillBlock(Bill bill, boolean done) {
+        StringBuilder sb = new StringBuilder("💰 ").append(bill.getDescription())
+                .append(" — ").append(formatCurrency(bill.getInstallmentAmount()));
+        if (done) {
+            sb.append("\n✅ ").append(bill.getStatus() == StatusBill.RECEIVED ? "Recebido" : "Pago");
+        }
+        return sb.toString();
+    }
+
     // Delega pra DayTypeService (unica fonte de verdade de "esse habito
     // ocorre nessa data", agora ciente de etiquetas de tipo de dia alem da
     // frequencia DAILY/WEEKLY antiga) -- mantido como metodo local pra nao
@@ -244,13 +281,16 @@ public class AgendaNotificationScheduler {
 
         weekEvents.stream()
                 .sorted((a, b) -> a.getEventDateTime().compareTo(b.getEventDateTime()))
-                .forEach(e -> (doneIds.contains(e.getId()) ? done : pending).add(NotificationMessageBuilder.eventBlock(e)));
+                .forEach(e -> {
+                    boolean isDone = doneIds.contains(e.getId());
+                    (isDone ? done : pending).add(summaryEventBlock(e, isDone));
+                });
 
         bills.stream()
                 .sorted((a, b) -> a.getMaturity().compareTo(b.getMaturity()))
                 .forEach(b -> {
                     boolean settled = b.getStatus() == StatusBill.PAID || b.getStatus() == StatusBill.RECEIVED;
-                    (settled ? done : pending).add(NotificationMessageBuilder.billBlock(b));
+                    (settled ? done : pending).add(summaryBillBlock(b, settled));
                 });
 
         weekGoals.forEach(g -> (Boolean.TRUE.equals(g.getCompleted()) ? done : pending).add("🎯 " + g.getTitle()));
@@ -330,15 +370,21 @@ public class AgendaNotificationScheduler {
 
         oneTimeToday.stream()
                 .sorted((a, b) -> a.getEventDateTime().compareTo(b.getEventDateTime()))
-                .forEach(e -> (doneIds.contains(e.getId()) ? done : pending).add(NotificationMessageBuilder.eventBlock(e)));
+                .forEach(e -> {
+                    boolean isDone = doneIds.contains(e.getId());
+                    (isDone ? done : pending).add(summaryEventBlock(e, isDone));
+                });
 
         habitsToday.stream()
                 .sorted((a, b) -> a.getTimeOfDay().compareTo(b.getTimeOfDay()))
-                .forEach(h -> (doneIds.contains(h.getId()) ? done : pending).add(NotificationMessageBuilder.habitBlock(h)));
+                .forEach(h -> {
+                    boolean isDone = doneIds.contains(h.getId());
+                    (isDone ? done : pending).add(summaryHabitBlock(h, isDone));
+                });
 
         billsToday.forEach(b -> {
             boolean settled = b.getStatus() == StatusBill.PAID || b.getStatus() == StatusBill.RECEIVED;
-            (settled ? done : pending).add(NotificationMessageBuilder.billBlock(b));
+            (settled ? done : pending).add(summaryBillBlock(b, settled));
         });
 
         weekGoals.forEach(g -> (Boolean.TRUE.equals(g.getCompleted()) ? done : pending).add("🎯 " + g.getTitle()));
