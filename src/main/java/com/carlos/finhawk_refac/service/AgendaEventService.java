@@ -368,8 +368,8 @@ public class AgendaEventService {
         }
 
         List<AgendaEvent> events = type != null
-                ? agendaEventRepository.findAllByAccount_IdAndTypeAndDeletedAtIsNull(accountId, type)
-                : agendaEventRepository.findAllByAccount_IdAndDeletedAtIsNull(accountId);
+                ? agendaEventRepository.findAllByAccount_IdAndTypeAndDeletedAtIsNullOrderByEventDateTimeAscTimeOfDayAsc(accountId, type)
+                : agendaEventRepository.findAllByAccount_IdAndDeletedAtIsNullOrderByEventDateTimeAscTimeOfDayAsc(accountId);
 
         return events.stream().map(this::toResponseDTO).toList();
     }

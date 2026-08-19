@@ -11,9 +11,16 @@ import java.util.List;
 @Repository
 public interface AgendaEventRepository extends JpaRepository<AgendaEvent, Long> {
 
-    List<AgendaEvent> findAllByAccount_IdAndDeletedAtIsNull(Long accountId);
+    // Ordenado por horario crescente na propria query -- eventDateTime pra
+    // ONE_TIME, timeOfDay pra HABIT (o outro campo fica nulo conforme o tipo,
+    // entao o segundo criterio so entra em jogo quando o primeiro empata,
+    // que e sempre o caso dentro de uma unica lista filtrada por tipo).
+    // Ordenar aqui, na fonte, evita depender de cada tela do frontend
+    // reordenar por conta propria.
+    List<AgendaEvent> findAllByAccount_IdAndDeletedAtIsNullOrderByEventDateTimeAscTimeOfDayAsc(Long accountId);
 
-    List<AgendaEvent> findAllByAccount_IdAndTypeAndDeletedAtIsNull(Long accountId, AgendaEventType type);
+    List<AgendaEvent> findAllByAccount_IdAndTypeAndDeletedAtIsNullOrderByEventDateTimeAscTimeOfDayAsc(
+            Long accountId, AgendaEventType type);
 
     // Lembrete "1h antes": eventos pontuais ativos, ainda nao notificados,
     // cujo horario cai dentro da janela verificada pelo job.
