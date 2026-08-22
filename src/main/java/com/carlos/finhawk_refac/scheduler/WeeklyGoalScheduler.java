@@ -60,6 +60,7 @@ public class WeeklyGoalScheduler {
                     .map(old -> {
                         WeeklyGoal fresh = new WeeklyGoal();
                         fresh.setTitle(old.getTitle());
+                        fresh.setDescription(old.getDescription());
                         fresh.setAccount(old.getAccount());
                         fresh.setWeekStartDate(thisMonday);
                         fresh.setCompleted(false);

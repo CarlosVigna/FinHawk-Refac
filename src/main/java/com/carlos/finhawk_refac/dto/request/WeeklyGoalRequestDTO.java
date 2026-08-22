@@ -9,6 +9,9 @@ public record WeeklyGoalRequestDTO(
         @Size(max = 255, message = "O título pode ter no máximo 255 caracteres.")
         String title,
 
+        @Size(max = 1000, message = "A descrição pode ter no máximo 1000 caracteres.")
+        String description,
+
         @NotNull(message = "A conta é obrigatória.")
         Long accountId
 ) {

@@ -129,6 +129,14 @@ public class AgendaNotificationScheduler {
         return sb.toString();
     }
 
+    private String summaryGoalBlock(WeeklyGoal goal) {
+        StringBuilder sb = new StringBuilder("🎯 ").append(goal.getTitle());
+        if (goal.getDescription() != null && !goal.getDescription().isBlank()) {
+            sb.append("\n📝 ").append(goal.getDescription());
+        }
+        return sb.toString();
+    }
+
     private String summaryBillBlock(Bill bill, boolean done) {
         StringBuilder sb = new StringBuilder("💰 ").append(bill.getDescription())
                 .append(" — ").append(formatCurrency(bill.getInstallmentAmount()));
@@ -293,7 +301,7 @@ public class AgendaNotificationScheduler {
                     (settled ? done : pending).add(summaryBillBlock(b, settled));
                 });
 
-        weekGoals.forEach(g -> (Boolean.TRUE.equals(g.getCompleted()) ? done : pending).add("🎯 " + g.getTitle()));
+        weekGoals.forEach(g -> (Boolean.TRUE.equals(g.getCompleted()) ? done : pending).add(summaryGoalBlock(g)));
 
         String message = renderSummary("📅 Semana (" + start.format(DATE_FMT) + " a " + end.format(DATE_FMT) + "):", pending, done);
         return new SummaryResult(message, itemCount);
@@ -387,7 +395,7 @@ public class AgendaNotificationScheduler {
             (settled ? done : pending).add(summaryBillBlock(b, settled));
         });
 
-        weekGoals.forEach(g -> (Boolean.TRUE.equals(g.getCompleted()) ? done : pending).add("🎯 " + g.getTitle()));
+        weekGoals.forEach(g -> (Boolean.TRUE.equals(g.getCompleted()) ? done : pending).add(summaryGoalBlock(g)));
 
         String message = renderSummary("📆 Hoje (" + today.format(DATE_FMT) + "):", pending, done);
         return new SummaryResult(message, itemCount);

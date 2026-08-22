@@ -58,6 +58,7 @@ public class WeeklyGoalService {
         return new WeeklyGoalResponseDTO(
                 goal.getId(),
                 goal.getTitle(),
+                goal.getDescription(),
                 goal.getAccount().getId(),
                 goal.getWeekStartDate(),
                 goal.getCompleted(),
@@ -90,6 +91,7 @@ public class WeeklyGoalService {
 
         WeeklyGoal goal = new WeeklyGoal();
         goal.setTitle(dto.title());
+        goal.setDescription(dto.description());
         goal.setAccount(account);
         goal.setWeekStartDate(currentWeekMonday());
         goal.setCompleted(false);
@@ -97,9 +99,33 @@ public class WeeklyGoalService {
         WeeklyGoal saved = weeklyGoalRepository.save(goal);
 
         auditLogService.record(currentUser, AuditLogService.CREATE, "WeeklyGoal", saved.getId(), saved.getTitle());
-        crudNotificationService.notify("🎯 Nova meta da semana\n📝 " + saved.getTitle());
+        crudNotificationService.notify(goalNotificationBlock("🎯 Nova meta da semana", saved));
 
         return toResponseDTO(saved);
+    }
+
+    @Transactional
+    public WeeklyGoalResponseDTO update(Long id, WeeklyGoalRequestDTO dto) {
+        UserAccount currentUser = getAuthenticatedUser();
+        WeeklyGoal goal = findOwned(id, currentUser);
+
+        goal.setTitle(dto.title());
+        goal.setDescription(dto.description());
+
+        WeeklyGoal updated = weeklyGoalRepository.save(goal);
+
+        auditLogService.record(currentUser, AuditLogService.UPDATE, "WeeklyGoal", updated.getId(), updated.getTitle());
+        crudNotificationService.notify(goalNotificationBlock("✏️ Meta atualizada", updated));
+
+        return toResponseDTO(updated);
+    }
+
+    private String goalNotificationBlock(String header, WeeklyGoal goal) {
+        StringBuilder sb = new StringBuilder(header).append("\n📝 ").append(goal.getTitle());
+        if (goal.getDescription() != null && !goal.getDescription().isBlank()) {
+            sb.append("\n").append(goal.getDescription());
+        }
+        return sb.toString();
     }
 
     public List<WeeklyGoalResponseDTO> getCurrentWeek(Long accountId) {
@@ -134,7 +160,7 @@ public class WeeklyGoalService {
         // correcao, sem notificacao, mesmo espirito de "pulado" nao notificar
         // pra habito.
         if (!wasCompleted && completed) {
-            crudNotificationService.notify("✅ Meta concluída!\n📝 " + updated.getTitle());
+            crudNotificationService.notify(goalNotificationBlock("✅ Meta concluída!", updated));
         }
 
         return toResponseDTO(updated);
@@ -148,6 +174,6 @@ public class WeeklyGoalService {
         weeklyGoalRepository.delete(goal);
 
         auditLogService.record(currentUser, AuditLogService.DELETE, "WeeklyGoal", goal.getId(), goal.getTitle());
-        crudNotificationService.notify("🗑️ Meta removida\n📝 " + goal.getTitle());
+        crudNotificationService.notify(goalNotificationBlock("🗑️ Meta removida", goal));
     }
 }

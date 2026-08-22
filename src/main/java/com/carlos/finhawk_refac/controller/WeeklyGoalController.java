@@ -24,6 +24,11 @@ public class WeeklyGoalController {
         return ResponseEntity.ok(weeklyGoalService.create(dto));
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<WeeklyGoalResponseDTO> update(@PathVariable Long id, @Valid @RequestBody WeeklyGoalRequestDTO dto) {
+        return ResponseEntity.ok(weeklyGoalService.update(id, dto));
+    }
+
     @GetMapping("/account/{accountId}/current")
     public ResponseEntity<List<WeeklyGoalResponseDTO>> getCurrentWeek(@PathVariable Long accountId) {
         return ResponseEntity.ok(weeklyGoalService.getCurrentWeek(accountId));

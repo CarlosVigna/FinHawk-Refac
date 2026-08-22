@@ -23,6 +23,8 @@ public class WeeklyGoal {
     @Column(nullable = false)
     private String title;
 
+    private String description;
+
     @ManyToOne(optional = false)
     @JoinColumn(name = "account_id")
     private Account account;
